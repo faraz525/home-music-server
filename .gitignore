@@ -1,0 +1,7 @@
+# .gitignore
+*.exe
+*.out
+music_server
+index
+vendor/
+.DS_Store 
