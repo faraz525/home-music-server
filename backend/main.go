@@ -24,6 +24,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/healthz", healthHandler)
+	mux.HandleFunc("/healthz", healthHandler)
 
 	addr := ":8080"
 	log.Printf("Starting music server on %s...", addr)
