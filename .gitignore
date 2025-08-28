@@ -5,3 +5,4 @@ music_server
 index
 vendor/
 .DS_Store 
+.env
