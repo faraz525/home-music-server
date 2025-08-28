@@ -1,14 +1,49 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:16-bookworm  # arm64 compatible
-    container_name: music-postgres
+  backend:
+    build: ./backend
+    container_name: cratedrop-backend
     restart: unless-stopped
     environment:
-      POSTGRES_DB: music_server
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Pulled from .env
-    ports:
-      - "5432:5432"
+      APP_ENV: ${APP_ENV:-production}
+      BASE_URL: ${BASE_URL:-http://localhost}
+      DATA_DIR: /data
+      SQLITE_PATH: /data/db/cratedrop.sqlite
+      JWT_SECRET: ${JWT_SECRET}
+      REFRESH_SECRET: ${REFRESH_SECRET}
+    user: "1000:1000"
     volumes:
-      - /mnt/music/postgres_data:/var/lib/postgresql/data  # Will bind to Pi's mount; local dev can use ./postgres_data
+      - /mnt/music/cratedrop:/data:rw
+    ports:
+      - "8080:8080" # direct access (optional); nginx proxies to this
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: cratedrop-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+
+# Postgres (optional, future). If you decide to switch from SQLite, enable below.
+#  db:
+#    image: postgres:16-bookworm  # arm64 compatible
+#    container_name: music-postgres
+#    restart: unless-stopped
+#    environment:
+#      POSTGRES_DB: music_server
+#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - /mnt/music/postgres_data:/var/lib/postgresql/data
