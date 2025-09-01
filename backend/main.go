@@ -104,7 +104,7 @@ func main() {
 		}
 	}
 
-	addr := ":8080"
+	addr := "0.0.0.0:8080"
 	log.Printf("Starting CrateDrop server on %s...", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("Server error: %v", err)
