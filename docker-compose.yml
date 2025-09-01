@@ -10,8 +10,8 @@ services:
       BASE_URL: ${BASE_URL:-http://localhost}
       DATA_DIR: /data
       SQLITE_PATH: /data/db/cratedrop.sqlite
-      JWT_SECRET: ${JWT_SECRET}
-      REFRESH_SECRET: ${REFRESH_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+      REFRESH_SECRET: ${REFRESH_SECRET:-dev-refresh-secret}
     user: "1000:1000"
     volumes:
       - /mnt/music/cratedrop:/data:rw

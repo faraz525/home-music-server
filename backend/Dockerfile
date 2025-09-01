@@ -8,11 +8,18 @@ COPY go.mod ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o /out/server ./
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o /out/server ./main.go
 
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ffmpeg ca-certificates tzdata curl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ffmpeg \
+       ca-certificates \
+       tzdata \
+       curl \
+       libsqlite3-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /out/server /app/server
