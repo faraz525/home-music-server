@@ -1,0 +1,196 @@
+package tracks
+
+import (
+	"fmt"
+	"io"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+
+	"github.com/faraz525/home-music-server/backend/models"
+	"github.com/faraz525/home-music-server/backend/utils"
+)
+
+// Manager handles track business logic and API management
+type Manager struct {
+	repo *Repository
+}
+
+// NewManager creates a new tracks manager
+func NewManager(repo *Repository) *Manager {
+	return &Manager{repo: repo}
+}
+
+// UploadTrack handles track upload with file processing
+func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, req *models.UploadTrackRequest) (*models.Track, error) {
+	// Open uploaded file
+	file, err := fileHeader.Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
+	}
+	defer file.Close()
+
+	// Validate file type
+	contentType := fileHeader.Header.Get("Content-Type")
+	if !utils.IsValidAudioType(contentType) {
+		return nil, fmt.Errorf("invalid file type. Only WAV, AIFF, FLAC, MP3 supported")
+	}
+
+	// Check file size (2GB limit)
+	if fileHeader.Size > 2*1024*1024*1024 {
+		return nil, fmt.Errorf("file too large. Maximum size is 2GB")
+	}
+
+	// Generate track ID and file path
+	trackID := utils.GenerateTrackID()
+	filename := fmt.Sprintf("%s%s", trackID, utils.GetFileExtension(fileHeader.Filename))
+	filePath := utils.BuildTrackFilePath(userID, trackID, filename)
+
+	// Ensure directory exists
+	fullPath := filepath.Join(os.Getenv("DATA_DIR"), filePath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create upload directory: %w", err)
+	}
+
+	// Save file temporarily
+	tempPath := fullPath + ".tmp"
+	tempFile, err := os.Create(tempPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tempPath) // Clean up temp file on error
+
+	if _, err := io.Copy(tempFile, file); err != nil {
+		tempFile.Close()
+		return nil, fmt.Errorf("failed to save file: %w", err)
+	}
+	tempFile.Close()
+
+	// Move temp file to final location
+	if err := os.Rename(tempPath, fullPath); err != nil {
+		return nil, fmt.Errorf("failed to finalize upload: %w", err)
+	}
+
+	// Extract metadata (simplified for now - in production use ffprobe)
+	duration := m.extractDuration(fullPath)
+
+	// Create track record
+	track := &models.Track{
+		OwnerUserID:      userID,
+		OriginalFilename: fileHeader.Filename,
+		ContentType:      contentType,
+		SizeBytes:        fileHeader.Size,
+		DurationSeconds:  &duration,
+		Title:            utils.StringToPtr(req.Title),
+		Artist:           utils.StringToPtr(req.Artist),
+		Album:            utils.StringToPtr(req.Album),
+		FilePath:         filePath,
+	}
+
+	track, err = m.repo.CreateTrack(track)
+	if err != nil {
+		// Clean up file if database insert fails
+		os.Remove(fullPath)
+		return nil, fmt.Errorf("failed to save track metadata: %w", err)
+	}
+
+	return track, nil
+}
+
+// GetTracks retrieves tracks for a user with pagination
+func (m *Manager) GetTracks(userID string, limit, offset int) (*models.TrackList, error) {
+	tracks, err := m.repo.GetTracks(userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tracks: %w", err)
+	}
+
+	total, err := m.repo.GetTracksCount(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count tracks: %w", err)
+	}
+
+	return utils.NewTrackList(tracks, total, limit, offset), nil
+}
+
+// GetAllTracks retrieves all tracks with search (admin only)
+func (m *Manager) GetAllTracks(limit, offset int, searchQuery string) (*models.TrackList, error) {
+	tracks, err := m.repo.GetAllTracks(limit, offset, searchQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tracks: %w", err)
+	}
+
+	total, err := m.repo.GetAllTracksCount()
+	if err != nil {
+		return nil, fmt.Errorf("failed to count tracks: %w", err)
+	}
+
+	return utils.NewTrackList(tracks, total, limit, offset), nil
+}
+
+// GetTrack retrieves a single track
+func (m *Manager) GetTrack(trackID string) (*models.Track, error) {
+	track, err := m.repo.GetTrackByID(trackID)
+	if err != nil {
+		return nil, fmt.Errorf("track not found: %w", err)
+	}
+	return track, nil
+}
+
+// DeleteTrack deletes a track and its file
+func (m *Manager) DeleteTrack(trackID string) error {
+	// Get track info first
+	track, err := m.repo.GetTrackByID(trackID)
+	if err != nil {
+		return fmt.Errorf("track not found: %w", err)
+	}
+
+	// Delete file
+	filePath := filepath.Join(os.Getenv("DATA_DIR"), track.FilePath)
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	// Delete from database
+	if err := m.repo.DeleteTrack(trackID); err != nil {
+		return fmt.Errorf("failed to delete track record: %w", err)
+	}
+
+	return nil
+}
+
+// SearchTracks searches tracks for a user
+func (m *Manager) SearchTracks(query, userID string, limit, offset int) (*models.TrackList, error) {
+	tracks, err := m.repo.SearchTracks(query, userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search tracks: %w", err)
+	}
+
+	// For search results, we don't provide total count for simplicity
+	// In production, you might want to implement this
+	total := len(tracks) // This is not accurate for pagination
+
+	return utils.NewTrackList(tracks, total, limit, offset), nil
+}
+
+// GetStreamInfo returns information needed for streaming
+func (m *Manager) GetStreamInfo(trackID string) (*models.Track, error) {
+	return m.repo.GetTrackByID(trackID)
+}
+
+// GetAvailableAPIs returns the list of available track APIs
+func (m *Manager) GetAvailableAPIs() []string {
+	return []string{
+		"POST /api/tracks - Upload track (multipart)",
+		"GET /api/tracks - List tracks (with search/pagination)",
+		"GET /api/tracks/:id - Get track metadata",
+		"GET /api/tracks/:id/stream - Stream audio (with Range support)",
+		"DELETE /api/tracks/:id - Delete track",
+	}
+}
+
+// extractDuration extracts duration from audio file (placeholder)
+func (m *Manager) extractDuration(filePath string) float64 {
+	// TODO: Implement ffprobe integration for accurate duration extraction
+	// For now, return 0
+	return 0
+}
