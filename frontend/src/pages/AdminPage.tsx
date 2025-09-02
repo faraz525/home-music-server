@@ -25,8 +25,15 @@ export function AdminPage() {
       const [usersRes] = await Promise.all([
         axios.get('/api/users'),
       ])
-      setUsers(usersRes.data?.users || usersRes.data || [])
+      // Ensure we always set an array, even if the response is malformed
+      const usersData = usersRes.data?.users || usersRes.data || []
+      setUsers(Array.isArray(usersData) ? usersData : [])
       // invites endpoints not exposed in backend repo; placeholder for future
+      setInvites([])
+    } catch (error) {
+      console.error('Failed to fetch admin data:', error)
+      // Set empty arrays on error to prevent map errors
+      setUsers([])
       setInvites([])
     } finally {
       setLoading(false)
@@ -57,7 +64,7 @@ export function AdminPage() {
             <div className="text-sm text-[#A1A1A1]">Loading…</div>
           ) : (
             <ul className="space-y-2">
-              {users.map((u) => (
+              {Array.isArray(users) && users.map((u) => (
                 <li key={u.id} className="flex items-center justify-between text-sm">
                   <span>{u.email}</span>
                   <span className="text-[#A1A1A1]">{u.role}</span>
@@ -73,7 +80,7 @@ export function AdminPage() {
             <button className="btn btn-primary">Create</button>
           </form>
           <ul className="space-y-2">
-            {invites.map((i) => (
+            {Array.isArray(invites) && invites.map((i) => (
               <li key={i.code} className="flex items-center justify-between text-sm">
                 <span>{i.code}</span>
                 <span className="text-[#A1A1A1]">{i.used_by ? 'used' : 'unused'}</span>

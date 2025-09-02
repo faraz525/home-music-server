@@ -27,8 +27,20 @@ export function LibraryPage() {
   const [progress, setProgress] = useState(0)
 
   const fetchTracks = useMemo(() => async () => {
-    const { data } = await axios.get('/api/tracks', { params: { q } })
-    setTracks(data)
+    try {
+      const { data } = await axios.get('/api/tracks', { params: { q } })
+      // Ensure data has the expected structure, fallback to empty tracks if not
+      if (data && data.tracks && Array.isArray(data.tracks)) {
+        setTracks(data)
+      } else {
+        // If the response doesn't have the expected structure, set empty tracks
+        setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
+      }
+    } catch (error) {
+      console.error('Failed to fetch tracks:', error)
+      // On error, set empty tracks to prevent the map error
+      setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
+    }
   }, [q])
 
   useEffect(() => {
@@ -88,7 +100,7 @@ export function LibraryPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tracks.tracks.map((t) => (
+        {Array.isArray(tracks.tracks) && tracks.tracks.map((t) => (
           <div key={t.id} className="card p-4 flex flex-col gap-2">
             <div className="text-base font-semibold truncate">{t.title || t.original_filename}</div>
             <div className="text-sm text-[#A1A1A1] truncate">{t.artist || 'Unknown Artist'}</div>

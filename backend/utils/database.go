@@ -56,6 +56,16 @@ func NewDB(dataDir string) (*DB, error) {
 
 // migrate runs database migrations
 func (db *DB) migrate() error {
+	// Check if tables already exist
+	var tableCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'").Scan(&tableCount)
+	if err != nil {
+		// If error, assume table doesn't exist and continue with migration
+	} else if tableCount > 0 {
+		// Tables already exist, skip migration
+		return nil
+	}
+
 	// Read schema file
 	schema, err := schemaFS.ReadFile("schema.sql")
 	if err != nil {

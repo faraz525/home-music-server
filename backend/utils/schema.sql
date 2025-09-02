@@ -6,7 +6,7 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 
 -- Users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE users (
 );
 
 -- Tracks table
-CREATE TABLE tracks (
+CREATE TABLE IF NOT EXISTS tracks (
     id TEXT PRIMARY KEY,
     owner_user_id TEXT NOT NULL,
     original_filename TEXT NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE tracks (
 );
 
 -- Refresh tokens table
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     token_hash TEXT NOT NULL,
@@ -43,15 +43,15 @@ CREATE TABLE refresh_tokens (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- Indexes for performance
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_tracks_owner ON tracks(owner_user_id);
-CREATE INDEX idx_tracks_search ON tracks(title, artist, album);
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at);
+-- Indexes for performance (only create if they don't exist)
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_tracks_owner ON tracks(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_search ON tracks(title, artist, album);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 
--- Triggers to update updated_at timestamps
-CREATE TRIGGER update_users_updated_at
+-- Triggers to update updated_at timestamps (only create if they don't exist)
+CREATE TRIGGER IF NOT EXISTS update_users_updated_at
     AFTER UPDATE ON users
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
@@ -59,7 +59,7 @@ BEGIN
     UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
-CREATE TRIGGER update_tracks_updated_at
+CREATE TRIGGER IF NOT EXISTS update_tracks_updated_at
     AFTER UPDATE ON tracks
     FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
