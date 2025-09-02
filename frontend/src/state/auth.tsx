@@ -19,7 +19,7 @@ type AuthContextValue = {
   user: User | null
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
-  signup: (invite: string, email: string, password: string) => Promise<void>
+  signup: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -72,8 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchMe()
   }, [client, fetchMe])
 
-  const signup = useCallback(async (invite: string, email: string, password: string) => {
-    const { data } = await client.post(`/api/auth/signup?invite=${encodeURIComponent(invite)}`, { email, password })
+  const signup = useCallback(async (email: string, password: string) => {
+    const { data } = await client.post('/api/auth/signup', { email, password })
     if (data?.access_token) setCookie('access_token', data.access_token, 60 * 15)
     await fetchMe()
   }, [client, fetchMe])
