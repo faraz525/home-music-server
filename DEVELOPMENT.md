@@ -1,4 +1,8 @@
-## CrateDrop v0 — Requirements (Raspberry Pi friendly)
+# 🎯 CrateDrop v0 — Development Documentation
+
+> **Internal Development Guide** - This document contains technical requirements, architecture details, and development specifications for the CrateDrop music server project.
+
+> 📖 **For end-users**: See [README.md](README.md) for installation and usage instructions.
 
 ### Overview
 CrateDrop is a minimalist web app for DJs to securely upload, organize, and stream their own music library. It targets a Raspberry Pi deployment with an attached SSD for storage, acting like a private “Dropbox for tracks” with a sleek web player.

@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-production}
+      GIN_MODE: ${GIN_MODE:-release}
       BASE_URL: ${BASE_URL:-http://localhost}
       DATA_DIR: /data
       SQLITE_PATH: /data/db/cratedrop.sqlite
@@ -15,6 +16,7 @@ services:
     user: "1000:1000"
     volumes:
       - /mnt/music/cratedrop:/data:rw
+      - ./logs:/app/logs:rw
     ports:
       - "8080:8080" # direct access (optional); nginx proxies to this
     healthcheck:

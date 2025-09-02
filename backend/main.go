@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,32 +14,53 @@ import (
 )
 
 func main() {
+	// Enhanced startup logging
+	fmt.Printf("[CrateDrop] Starting CrateDrop server at %s...\n", time.Now().Format("2006-01-02 15:04:05"))
+
 	// Initialize database
 	dataDir := os.Getenv("DATA_DIR")
 	if dataDir == "" {
 		dataDir = "/mnt/music/cratedrop"
 	}
+	fmt.Printf("[CrateDrop] Using data directory: %s\n", dataDir)
 
 	db, err := utils.NewDB(dataDir)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Fatalf("[CrateDrop] Failed to initialize database: %v", err)
 	}
 	defer db.Close()
+	fmt.Printf("[CrateDrop] Database initialized successfully\n")
 
 	// Initialize repositories
 	authRepo := auth.NewRepository(db)
 	tracksRepo := tracks.NewRepository(db)
+	fmt.Printf("[CrateDrop] Repositories initialized\n")
 
 	// Initialize managers
 	authManager, err := auth.NewManager(authRepo)
 	if err != nil {
-		log.Fatalf("Failed to initialize auth manager: %v", err)
+		log.Fatalf("[CrateDrop] Failed to initialize auth manager: %v", err)
 	}
+	fmt.Printf("[CrateDrop] Auth manager initialized\n")
 
 	tracksManager := tracks.NewManager(tracksRepo)
+	fmt.Printf("[CrateDrop] Tracks manager initialized\n")
 
-	// Initialize Gin router
-	r := gin.Default()
+	// Initialize Gin router with custom logging
+	r := gin.New()
+
+	// Add custom logger middleware
+	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		return fmt.Sprintf("[CrateDrop] %s | %3d | %13v | %15s | %-7s %s\n",
+			param.TimeStamp.Format("2006/01/02 15:04:05"),
+			param.StatusCode,
+			param.Latency,
+			param.ClientIP,
+			param.Method,
+			param.Path,
+		)
+	}))
+	r.Use(gin.Recovery())
 
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
@@ -105,8 +128,11 @@ func main() {
 	}
 
 	addr := "0.0.0.0:8080"
-	log.Printf("Starting CrateDrop server on %s...", addr)
+	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)
+	fmt.Printf("[CrateDrop] API available at http://%s/api\n", addr)
+	fmt.Printf("[CrateDrop] Health check at http://%s/api/healthz\n", addr)
+
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("Server error: %v", err)
+		log.Fatalf("[CrateDrop] Server error: %v", err)
 	}
 }
