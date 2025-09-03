@@ -75,25 +75,25 @@ export function LibraryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search your library"
           className="input flex-1"
         />
-        <button className="btn btn-primary" onClick={fetchTracks}>Search</button>
+        <button className="btn btn-primary sm:w-auto w-full" onClick={fetchTracks}>Search</button>
       </div>
 
       <div className="card p-4">
-        <form className="flex items-center gap-3" onSubmit={onUpload}>
+        <form className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3" onSubmit={onUpload}>
           <input
             type="file"
             className="input file:mr-4 file:rounded-full file:border-0 file:bg-[#1DB954] file:text-black file:px-3 file:py-1"
             onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
             accept="audio/*"
           />
-          <button className="btn btn-primary" disabled={!file || uploading}>
+          <button className="btn btn-primary sm:w-auto w-full" disabled={!file || uploading}>
             {uploading ? `Uploading ${progress}%` : 'Upload'}
           </button>
         </form>
