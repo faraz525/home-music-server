@@ -32,7 +32,7 @@ export function PlayerBar() {
 
   return (
     <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212]">
-      <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4">
+      <div className="mx-auto max-w-6xl px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-4">
         <button className="btn" title="Previous" onClick={prev}>
           <SkipBack />
         </button>
@@ -43,7 +43,7 @@ export function PlayerBar() {
           <SkipForward />
         </button>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-[80px]">
           <div className="h-1 rounded-full bg-[#2A2A2A]">
             <div className="h-1 rounded-full bg-[#1DB954]" style={{ width: `${pct}%` }} />
           </div>

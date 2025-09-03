@@ -57,7 +57,7 @@ export function AdminPage() {
   return (
     <div className="space-y-6">
       <div className="text-xl font-bold">Admin</div>
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-4">
           <div className="font-semibold mb-2">Users</div>
           {loading ? (
@@ -75,9 +75,9 @@ export function AdminPage() {
         </div>
         <div className="card p-4">
           <div className="font-semibold mb-2">Invites</div>
-          <form className="flex gap-2 mb-3" onSubmit={createInvite}>
+          <form className="flex flex-col sm:flex-row gap-2 mb-3" onSubmit={createInvite}>
             <input className="input flex-1" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
-            <button className="btn btn-primary">Create</button>
+            <button className="btn btn-primary sm:w-auto w-full">Create</button>
           </form>
           <ul className="space-y-2">
             {Array.isArray(invites) && invites.map((i) => (
