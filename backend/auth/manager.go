@@ -223,7 +223,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		var authSource string
 
-		// Fallback to cookie for cases like <audio> tag or dev proxy
 		if authHeader == "" {
 			if cookie, err := c.Cookie("access_token"); err == nil && cookie != "" {
 				authHeader = "Bearer " + cookie
