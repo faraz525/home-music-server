@@ -18,6 +18,7 @@ type User = {
 type AuthContextValue = {
   user: User | null
   isAuthenticated: boolean
+  ready: boolean
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [ready, setReady] = useState(false)
 
   const client = useMemo(() => {
     const instance = axios.create({ withCredentials: true })
@@ -59,6 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data?.user || null)
     } catch (_) {
       setUser(null)
+    } finally {
+      setReady(true)
     }
   }, [client])
 
@@ -86,10 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextValue = useMemo(() => ({
     user,
     isAuthenticated: !!user,
+    ready,
     login,
     signup,
     logout,
-  }), [user, login, signup, logout])
+  }), [user, ready, login, signup, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -3,12 +3,49 @@ package auth
 import (
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/faraz525/home-music-server/backend/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
+
+// getCookieDomain determines the appropriate domain for cookies based on BASE_URL
+func getCookieDomain() string {
+	baseURL := os.Getenv("BASE_URL")
+	var domain string
+
+	// For localhost/development, don't set a domain to allow access from any IP
+	// For production, use the specified domain
+	if baseURL == "" || baseURL == "http://localhost" || strings.Contains(baseURL, "localhost") {
+		domain = "" // Empty domain allows cookies to work from any domain
+	} else {
+		domain = baseURL
+		// Remove protocol from domain for cookie
+		if strings.HasPrefix(domain, "http://") {
+			domain = domain[7:]
+		} else if strings.HasPrefix(domain, "https://") {
+			domain = domain[8:]
+		}
+	}
+
+	return domain
+}
+
+// setAuthCookies sets both access and refresh token cookies with the appropriate domain
+func setAuthCookies(c *gin.Context, tokens *models.Tokens) {
+	domain := getCookieDomain()
+	c.SetCookie("refresh_token", tokens.RefreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", domain, false, true)
+	c.SetCookie("access_token", tokens.AccessToken, 60*15, "/", domain, false, true)
+}
+
+// clearAuthCookies clears both access and refresh token cookies
+func clearAuthCookies(c *gin.Context) {
+	domain := getCookieDomain()
+	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+	c.SetCookie("access_token", "", -1, "/", domain, false, true)
+}
 
 type SignupRequest struct {
 	Email    string `json:"email" binding:"required,email"`
@@ -46,6 +83,8 @@ func SignupHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
+		setAuthCookies(c, tokens)
+
 		c.JSON(http.StatusCreated, tokens)
 	}
 }
@@ -63,6 +102,8 @@ func LoginHandler(manager *Manager) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "login_failed", "message": err.Error()}})
 			return
 		}
+
+		setAuthCookies(c, tokens)
 
 		c.JSON(http.StatusOK, tokens)
 	}
@@ -87,13 +128,8 @@ func RefreshHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Set new refresh token in cookie
-		domain := os.Getenv("BASE_URL")
-		if domain == "" {
-			domain = "localhost"
-		}
-
-		c.SetCookie("refresh_token", tokens.RefreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", domain, false, true)
+		// Set new tokens in cookies
+		setAuthCookies(c, tokens)
 
 		c.JSON(http.StatusOK, tokens)
 	}
@@ -107,13 +143,8 @@ func LogoutHandler(manager *Manager) gin.HandlerFunc {
 			manager.Logout(refreshToken)
 		}
 
-		// Clear refresh token cookie
-		domain := os.Getenv("BASE_URL")
-		if domain == "" {
-			domain = "localhost"
-		}
-
-		c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+		// Clear both cookies
+		clearAuthCookies(c)
 		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 	}
 }
