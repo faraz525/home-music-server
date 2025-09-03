@@ -4,9 +4,8 @@ import { usePlayer } from '../../state/player'
 
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const { queue, index, next, prev } = usePlayer()
+  const { queue, index, next, prev, isPlaying, toggle } = usePlayer()
   const current = queue[index]
-  const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
 
@@ -37,7 +36,7 @@ export function PlayerBar() {
         <button className="btn" title="Previous" onClick={prev}>
           <SkipBack />
         </button>
-        <button className="btn btn-primary" title={isPlaying ? 'Pause' : 'Play'} onClick={() => setIsPlaying((p) => !p)}>
+        <button className="btn btn-primary" title={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
           {isPlaying ? <Pause /> : <Play />}
         </button>
         <button className="btn" title="Next" onClick={next}>

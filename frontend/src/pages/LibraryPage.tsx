@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { api } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 
@@ -28,7 +28,7 @@ export function LibraryPage() {
 
   const fetchTracks = useMemo(() => async () => {
     try {
-      const { data } = await axios.get('/api/tracks', { params: { q } })
+      const { data } = await api.get('/api/tracks', { params: { q } })
       // Ensure data has the expected structure, fallback to empty tracks if not
       if (data && data.tracks && Array.isArray(data.tracks)) {
         setTracks(data)
@@ -55,7 +55,7 @@ export function LibraryPage() {
     setUploading(true)
     setProgress(0)
     try {
-      await axios.post('/api/tracks', form, {
+      await api.post('/api/tracks', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (ev) => {
           if (ev.total) setProgress(Math.round((ev.loaded * 100) / ev.total))
@@ -69,7 +69,7 @@ export function LibraryPage() {
   }
 
   async function onDelete(id: string) {
-    await axios.delete(`/api/tracks/${id}`)
+    await api.delete(`/api/tracks/${id}`)
     await fetchTracks()
   }
 

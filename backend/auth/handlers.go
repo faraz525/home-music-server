@@ -120,6 +120,17 @@ func LogoutHandler(manager *Manager) gin.HandlerFunc {
 
 func MeHandler(manager *Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Dev bypass: return a mock user so frontend can proceed without DB lookup
+		if os.Getenv("DEV_AUTH_BYPASS") == "1" {
+			c.JSON(http.StatusOK, gin.H{
+				"user": gin.H{
+					"id":    "dev-user",
+					"email": "dev@local",
+					"role":  "admin",
+				},
+			})
+			return
+		}
 		userID, _ := c.Get("user_id")
 		user, err := manager.GetCurrentUser(userID.(string))
 		if err != nil {
