@@ -21,10 +21,11 @@ func (r *Repository) CreateTrack(track *models.Track) (*models.Track, error) {
 
 	_, err := r.db.Exec(
 		`INSERT INTO tracks (id, owner_user_id, original_filename, content_type, size_bytes,
-			duration_seconds, title, artist, album, file_path, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, track.OwnerUserID, track.OriginalFilename, track.ContentType, track.SizeBytes,
-		track.DurationSeconds, track.Title, track.Artist, track.Album, track.FilePath, track.CreatedAt, track.UpdatedAt,
+		track.DurationSeconds, track.Title, track.Artist, track.Album, track.Genre, track.Year,
+		track.SampleRate, track.Bitrate, track.FilePath, track.CreatedAt, track.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func (r *Repository) CreateTrack(track *models.Track) (*models.Track, error) {
 // GetTracks retrieves tracks for a user with pagination
 func (r *Repository) GetTracks(userID string, limit, offset int) ([]*models.Track, error) {
 	query := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, file_path, created_at, updated_at
+		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 		FROM tracks WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
 	rows, err := r.db.Query(query, userID, limit, offset)
@@ -51,8 +52,8 @@ func (r *Repository) GetTracks(userID string, limit, offset int) ([]*models.Trac
 		var track models.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.FilePath,
-			&track.CreatedAt, &track.UpdatedAt,
+			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
+			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -70,14 +71,14 @@ func (r *Repository) GetAllTracks(limit, offset int, searchQuery string) ([]*mod
 
 	if searchQuery != "" {
 		query = `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-			duration_seconds, title, artist, album, file_path, created_at, updated_at
-			FROM tracks WHERE title LIKE ? OR artist LIKE ? OR album LIKE ? OR original_filename LIKE ?
+			duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
+			FROM tracks WHERE title LIKE ? OR artist LIKE ? OR album LIKE ? OR genre LIKE ? OR original_filename LIKE ?
 			ORDER BY created_at DESC LIMIT ? OFFSET ?`
 		searchPattern := "%" + searchQuery + "%"
-		args = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern, limit, offset}
+		args = []interface{}{searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset}
 	} else {
 		query = `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-			duration_seconds, title, artist, album, file_path, created_at, updated_at
+			duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 			FROM tracks ORDER BY created_at DESC LIMIT ? OFFSET ?`
 		args = []interface{}{limit, offset}
 	}
@@ -93,8 +94,8 @@ func (r *Repository) GetAllTracks(limit, offset int, searchQuery string) ([]*mod
 		var track models.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.FilePath,
-			&track.CreatedAt, &track.UpdatedAt,
+			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
+			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -110,13 +111,13 @@ func (r *Repository) GetTrackByID(trackID string) (*models.Track, error) {
 	var track models.Track
 	err := r.db.QueryRow(
 		`SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, file_path, created_at, updated_at
+		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 		FROM tracks WHERE id = ?`,
 		trackID,
 	).Scan(
 		&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-		&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.FilePath,
-		&track.CreatedAt, &track.UpdatedAt,
+		&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
+		&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -144,15 +145,15 @@ func (r *Repository) GetAllTracksCount() (int, error) {
 	return count, err
 }
 
-// SearchTracks searches tracks by title, artist, or album
+// SearchTracks searches tracks by title, artist, album, genre, or filename
 func (r *Repository) SearchTracks(query string, userID string, limit, offset int) ([]*models.Track, error) {
 	searchPattern := "%" + query + "%"
 	searchQuery := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, file_path, created_at, updated_at
-		FROM tracks WHERE owner_user_id = ? AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR original_filename LIKE ?)
+		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
+		FROM tracks WHERE owner_user_id = ? AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR genre LIKE ? OR original_filename LIKE ?)
 		ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
-	rows, err := r.db.Query(searchQuery, userID, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset)
+	rows, err := r.db.Query(searchQuery, userID, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +164,8 @@ func (r *Repository) SearchTracks(query string, userID string, limit, offset int
 		var track models.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.FilePath,
-			&track.CreatedAt, &track.UpdatedAt,
+			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
+			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err

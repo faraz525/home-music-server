@@ -71,28 +71,29 @@ func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, r
 		return nil, fmt.Errorf("failed to finalize upload: %w", err)
 	}
 
-	// Extract metadata (simplified for now - in production use ffprobe)
-	duration := m.extractDuration(fullPath)
-
-	// Create track record
-	track := &models.Track{
-		OwnerUserID:      userID,
-		OriginalFilename: fileHeader.Filename,
-		ContentType:      contentType,
-		SizeBytes:        fileHeader.Size,
-		DurationSeconds:  &duration,
-		Title:            utils.StringToPtr(req.Title),
-		Artist:           utils.StringToPtr(req.Artist),
-		Album:            utils.StringToPtr(req.Album),
-		FilePath:         filePath,
+	// Extract metadata from the audio file
+	fmt.Printf("[CrateDrop] Starting metadata extraction for file: %s\n", fullPath)
+	metadata, err := utils.ExtractMetadata(fullPath)
+	if err != nil {
+		// Log the error but don't fail - continue with basic info
+		fmt.Printf("[CrateDrop] Warning: failed to extract metadata: %v\n", err)
+		metadata = &utils.AudioMetadata{} // Empty metadata as fallback
 	}
 
+	// Create track record from metadata and request data
+	track := utils.CreateTrackFromMetadata(metadata, userID, fileHeader.Filename, contentType, filePath, fileHeader.Size, req)
+	fmt.Printf("[CrateDrop] Created track record: ID=%s, Title=%v, Artist=%v, Album=%v\n",
+		track.ID, track.Title, track.Artist, track.Album)
+
+	fmt.Printf("[CrateDrop] Inserting track into database...\n")
 	track, err = m.repo.CreateTrack(track)
 	if err != nil {
 		// Clean up file if database insert fails
 		os.Remove(fullPath)
+		fmt.Printf("[CrateDrop] Database insert failed: %v\n", err)
 		return nil, fmt.Errorf("failed to save track metadata: %w", err)
 	}
+	fmt.Printf("[CrateDrop] Track successfully saved with ID: %s\n", track.ID)
 
 	return track, nil
 }
@@ -186,11 +187,4 @@ func (m *Manager) GetAvailableAPIs() []string {
 		"GET /api/tracks/:id/stream - Stream audio (with Range support)",
 		"DELETE /api/tracks/:id - Delete track",
 	}
-}
-
-// extractDuration extracts duration from audio file (placeholder)
-func (m *Manager) extractDuration(filePath string) float64 {
-	// TODO: Implement ffprobe integration for accurate duration extraction
-	// For now, return 0
-	return 0
 }

@@ -29,27 +29,37 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
+		fmt.Printf("[CrateDrop] Upload request received for user: %v\n", userID)
+
 		// Get file from form
 		file, header, err := c.Request.FormFile("file")
 		if err != nil {
+			fmt.Printf("[CrateDrop] No file provided: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "no_file", "message": "No file provided"}})
 			return
 		}
 		defer file.Close()
 
+		fmt.Printf("[CrateDrop] File received: %s (%d bytes)\n", header.Filename, header.Size)
+
 		// Parse form data
 		var req models.UploadTrackRequest
 		if err := c.ShouldBind(&req); err != nil {
+			fmt.Printf("[CrateDrop] Form binding failed: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "invalid_form", "message": err.Error()}})
 			return
 		}
 
+		fmt.Printf("[CrateDrop] Form data: Title=%s, Artist=%s, Album=%s\n", req.Title, req.Artist, req.Album)
+
 		track, err := manager.UploadTrack(userID.(string), header, &req)
 		if err != nil {
+			fmt.Printf("[CrateDrop] Upload failed: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "upload_failed", "message": err.Error()}})
 			return
 		}
 
+		fmt.Printf("[CrateDrop] Upload successful, returning track: %s\n", track.ID)
 		c.JSON(http.StatusCreated, gin.H{"track": track})
 	}
 }

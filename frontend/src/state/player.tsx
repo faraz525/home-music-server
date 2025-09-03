@@ -13,6 +13,8 @@ type PlayerContextValue = {
   play: (item: QueueItem, replace?: boolean) => void
   next: () => void
   prev: () => void
+  isPlaying: boolean
+  toggle: () => void
 }
 
 const PlayerContext = createContext<PlayerContextValue | undefined>(undefined)
@@ -20,6 +22,7 @@ const PlayerContext = createContext<PlayerContextValue | undefined>(undefined)
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [index, setIndex] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   function play(item: QueueItem, replace = false) {
     if (replace || queue.length === 0) {
@@ -28,11 +31,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     } else {
       setQueue((q) => [...q, item])
     }
+    setIsPlaying(true)
   }
   function next() { setIndex((i) => Math.min(queue.length - 1, i + 1)) }
   function prev() { setIndex((i) => Math.max(0, i - 1)) }
+  function toggle() { setIsPlaying((p) => !p) }
 
-  const value = useMemo(() => ({ queue, index, play, next, prev }), [queue, index])
+  const value = useMemo(() => ({ queue, index, play, next, prev, isPlaying, toggle }), [queue, index, isPlaying])
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }
 

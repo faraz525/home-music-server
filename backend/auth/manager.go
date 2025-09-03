@@ -210,7 +210,21 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*utils.Claims, error)
 // AuthMiddleware validates JWT tokens and adds user context
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Dev bypass: if explicitly enabled, trust a fixed user
+		if os.Getenv("DEV_AUTH_BYPASS") == "1" {
+			c.Set("user_id", "dev-user")
+			c.Set("user_email", "dev@local")
+			c.Set("user_role", "admin")
+			c.Next()
+			return
+		}
 		authHeader := c.GetHeader("Authorization")
+		// Fallback to cookie for cases like <audio> tag or dev proxy
+		if authHeader == "" {
+			if cookie, err := c.Cookie("access_token"); err == nil && cookie != "" {
+				authHeader = "Bearer " + cookie
+			}
+		}
 		if authHeader == "" {
 			c.JSON(401, gin.H{"error": gin.H{"code": "auth_required", "message": "Authorization header required"}})
 			c.Abort()
