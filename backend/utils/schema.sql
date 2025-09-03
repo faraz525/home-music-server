@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS tracks (
     title TEXT,
     artist TEXT,
     album TEXT,
+    genre TEXT,
+    year INTEGER,
+    sample_rate INTEGER,
+    bitrate INTEGER,
     file_path TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -47,6 +51,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_tracks_owner ON tracks(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_search ON tracks(title, artist, album);
+CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 

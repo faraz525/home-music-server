@@ -25,6 +25,10 @@ type Track struct {
 	Title            *string   `json:"title,omitempty"`
 	Artist           *string   `json:"artist,omitempty"`
 	Album            *string   `json:"album,omitempty"`
+	Genre            *string   `json:"genre,omitempty"`
+	Year             *int      `json:"year,omitempty"`
+	SampleRate       *int      `json:"sample_rate,omitempty"`
+	Bitrate          *int      `json:"bitrate,omitempty"`
 	FilePath         string    `json:"file_path"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
@@ -54,9 +58,13 @@ type LoginRequest struct {
 
 // UploadTrackRequest represents a track upload request
 type UploadTrackRequest struct {
-	Title  string `form:"title"`
-	Artist string `form:"artist"`
-	Album  string `form:"album"`
+	Title      string `form:"title"`
+	Artist     string `form:"artist"`
+	Album      string `form:"album"`
+	Genre      string `form:"genre"`
+	Year       int    `form:"year"`
+	SampleRate int    `form:"sample_rate"`
+	Bitrate    int    `form:"bitrate"`
 }
 
 // Tokens represents the response containing access and refresh tokens
@@ -68,9 +76,9 @@ type Tokens struct {
 
 // APIResponse represents a standard API response
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    any `json:"data,omitempty"`
-	Error   *APIError   `json:"error,omitempty"`
+	Success bool      `json:"success"`
+	Data    any       `json:"data,omitempty"`
+	Error   *APIError `json:"error,omitempty"`
 }
 
 // APIError represents an API error response
