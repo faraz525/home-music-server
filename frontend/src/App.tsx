@@ -7,7 +7,8 @@ import { AdminPage } from './pages/AdminPage'
 import { AuthProvider, useAuth } from './state/auth'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, ready } = useAuth()
+  if (!ready) return null
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 

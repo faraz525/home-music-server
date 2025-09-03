@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -218,14 +219,27 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+
 		authHeader := c.GetHeader("Authorization")
+		var authSource string
+
 		// Fallback to cookie for cases like <audio> tag or dev proxy
 		if authHeader == "" {
 			if cookie, err := c.Cookie("access_token"); err == nil && cookie != "" {
 				authHeader = "Bearer " + cookie
+				authSource = "cookie"
+			} else {
+				authSource = "none"
 			}
+		} else {
+			authSource = "header"
 		}
+
+		fmt.Printf("[DEBUG] AuthMiddleware - Path: %s, Auth source: %s, Has auth header: %v\n",
+			c.Request.URL.Path, authSource, authHeader != "")
+
 		if authHeader == "" {
+			fmt.Printf("[DEBUG] AuthMiddleware - No auth found, returning 401\n")
 			c.JSON(401, gin.H{"error": gin.H{"code": "auth_required", "message": "Authorization header required"}})
 			c.Abort()
 			return
@@ -234,16 +248,19 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Extract token from "Bearer <token>"
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			fmt.Printf("[DEBUG] AuthMiddleware - Invalid auth format: %s\n", authHeader)
 			c.JSON(401, gin.H{"error": gin.H{"code": "invalid_auth_format", "message": "Authorization header must be Bearer <token>"}})
 			c.Abort()
 			return
 		}
 
 		tokenString := parts[1]
+		fmt.Printf("[DEBUG] AuthMiddleware - Validating token (length: %d)\n", len(tokenString))
 
 		// Validate token
 		claims, err := utils.ValidateAccessToken(tokenString)
 		if err != nil {
+			fmt.Printf("[DEBUG] AuthMiddleware - Token validation failed: %v\n", err)
 			if strings.Contains(err.Error(), "token is expired") {
 				c.JSON(401, gin.H{"error": gin.H{"code": "token_expired", "message": "Access token expired"}})
 			} else {
@@ -252,6 +269,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		fmt.Printf("[DEBUG] AuthMiddleware - Token validated successfully for user: %s\n", claims.UserID)
 
 		// Add user info to context
 		c.Set("user_id", claims.UserID)
