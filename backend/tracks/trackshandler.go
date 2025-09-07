@@ -71,6 +71,7 @@ func ListHandler(manager *Manager) gin.HandlerFunc {
 
 		// Parse query parameters
 		q := c.Query("q")
+		playlistID := c.Query("playlist_id")
 		limitStr := c.DefaultQuery("limit", "20")
 		offsetStr := c.DefaultQuery("offset", "0")
 
@@ -86,7 +87,16 @@ func ListHandler(manager *Manager) gin.HandlerFunc {
 
 		var trackList *models.TrackList
 
-		if userRole == "admin" && q != "" {
+		// Handle playlist-based queries
+		if playlistID != "" {
+			if playlistID == "unsorted" {
+				// Get tracks not in any playlist
+				trackList, err = manager.GetUnsortedTracks(userID.(string), limit, offset)
+			} else {
+				// Get tracks from specific playlist
+				trackList, err = manager.GetPlaylistTracks(playlistID, userID.(string), limit, offset)
+			}
+		} else if userRole == "admin" && q != "" {
 			// Admin can search all tracks
 			trackList, err = manager.GetAllTracks(limit, offset, q)
 		} else if userRole == "admin" {

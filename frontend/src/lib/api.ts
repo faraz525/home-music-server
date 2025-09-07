@@ -29,3 +29,37 @@ api.interceptors.response.use(
   }
 )
 
+// Playlist API functions
+export const playlistsApi = {
+  // Playlist CRUD
+  create: (data: { name: string; description?: string }) =>
+    api.post('/api/playlists', data),
+
+  list: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/playlists', { params }),
+
+  get: (id: string) =>
+    api.get(`/api/playlists/${id}`),
+
+  update: (id: string, data: { name: string; description?: string }) =>
+    api.put(`/api/playlists/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/api/playlists/${id}`),
+
+  // Track management
+  addTracks: (id: string, trackIds: string[]) =>
+    api.post(`/api/playlists/${id}/tracks`, { track_ids: trackIds }),
+
+  removeTracks: (id: string, trackIds: string[]) =>
+    api.delete(`/api/playlists/${id}/tracks`, { data: { track_ids: trackIds } }),
+
+  getTracks: (id: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/api/playlists/${id}/tracks`, { params }),
+}
+
+// Unsorted tracks
+export const tracksApi = {
+  getUnsorted: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/tracks/unsorted', { params }),
+}

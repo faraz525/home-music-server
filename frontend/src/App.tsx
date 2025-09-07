@@ -3,6 +3,7 @@ import { Layout } from './components/layout/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { LibraryPage } from './pages/LibraryPage'
+import { PlaylistsPage } from './pages/PlaylistsPage'
 import { AdminPage } from './pages/AdminPage'
 import { AuthProvider, useAuth } from './state/auth'
 
@@ -27,6 +28,7 @@ export default function App() {
           }
         >
           <Route index element={<LibraryPage />} />
+          <Route path="/playlists" element={<PlaylistsPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Route>
       </Routes>

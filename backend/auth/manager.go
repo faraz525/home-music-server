@@ -12,11 +12,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// PlaylistCreator interface for creating default playlists
+type PlaylistCreator interface {
+	EnsureDefaultPlaylist(userID string) (*models.Playlist, error)
+}
+
 // Manager handles authentication business logic and API management
 type Manager struct {
-	repo          *Repository
-	jwtSecret     string
-	refreshSecret string
+	repo            *Repository
+	jwtSecret       string
+	refreshSecret   string
+	playlistCreator PlaylistCreator
 }
 
 // NewManager creates a new auth manager
@@ -36,6 +42,11 @@ func NewManager(repo *Repository) (*Manager, error) {
 		jwtSecret:     jwtSecret,
 		refreshSecret: refreshSecret,
 	}, nil
+}
+
+// SetPlaylistCreator sets the playlist creator for creating default playlists
+func (m *Manager) SetPlaylistCreator(creator PlaylistCreator) {
+	m.playlistCreator = creator
 }
 
 // Signup handles user registration
@@ -75,6 +86,15 @@ func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
 	user, err := m.repo.CreateUser(req.Email, hashedPassword, role)
 	if err != nil {
 		return nil, errors.New("failed to create user")
+	}
+
+	// Create default playlist for new user
+	if m.playlistCreator != nil {
+		_, err = m.playlistCreator.EnsureDefaultPlaylist(user.ID)
+		if err != nil {
+			fmt.Printf("[WARNING] Failed to create default playlist for user %s: %v\n", user.ID, err)
+			// Don't fail signup if playlist creation fails
+		}
 	}
 
 	// Generate tokens

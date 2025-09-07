@@ -11,14 +11,25 @@ import (
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
+// PlaylistAdder interface for adding tracks to playlists
+type PlaylistAdder interface {
+	AddTracksToPlaylist(playlistID, requestingUserID string, req *models.AddTracksToPlaylistRequest) error
+}
+
 // Manager handles track business logic and API management
 type Manager struct {
-	repo *Repository
+	repo          *Repository
+	playlistAdder PlaylistAdder
 }
 
 // NewManager creates a new tracks manager
 func NewManager(repo *Repository) *Manager {
 	return &Manager{repo: repo}
+}
+
+// SetPlaylistAdder sets the playlist adder for adding tracks to playlists
+func (m *Manager) SetPlaylistAdder(adder PlaylistAdder) {
+	m.playlistAdder = adder
 }
 
 // UploadTrack handles track upload with file processing
@@ -94,6 +105,19 @@ func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, r
 		return nil, fmt.Errorf("failed to save track metadata: %w", err)
 	}
 	fmt.Printf("[CrateDrop] Track successfully saved with ID: %s\n", track.ID)
+
+	// Add track to playlist if specified
+	if req.PlaylistID != nil && *req.PlaylistID != "" && m.playlistAdder != nil {
+		fmt.Printf("[CrateDrop] Adding track to playlist: %s\n", *req.PlaylistID)
+		addReq := &models.AddTracksToPlaylistRequest{
+			TrackIDs: []string{track.ID},
+		}
+		err = m.playlistAdder.AddTracksToPlaylist(*req.PlaylistID, userID, addReq)
+		if err != nil {
+			fmt.Printf("[CrateDrop] Warning: failed to add track to playlist: %v\n", err)
+			// Don't fail the upload if playlist assignment fails
+		}
+	}
 
 	return track, nil
 }
@@ -173,6 +197,51 @@ func (m *Manager) SearchTracks(query, userID string, limit, offset int) (*models
 	return utils.NewTrackList(tracks, total, limit, offset), nil
 }
 
+// GetUnsortedTracks returns tracks not assigned to any playlist
+func (m *Manager) GetUnsortedTracks(userID string, limit, offset int) (*models.TrackList, error) {
+	if m.playlistAdder == nil {
+		// Fallback to regular tracks if no playlist manager
+		return m.GetTracks(userID, limit, offset)
+	}
+
+	// Use the playlist manager to get unsorted tracks
+	if playlistManager, ok := m.playlistAdder.(interface {
+		GetUnsortedTracks(userID string, limit, offset int) (*models.TrackList, error)
+	}); ok {
+		return playlistManager.GetUnsortedTracks(userID, limit, offset)
+	}
+
+	// Fallback to regular tracks
+	return m.GetTracks(userID, limit, offset)
+}
+
+// GetPlaylistTracks returns tracks from a specific playlist
+func (m *Manager) GetPlaylistTracks(playlistID, userID string, limit, offset int) (*models.TrackList, error) {
+	if m.playlistAdder == nil {
+		return &models.TrackList{Tracks: []*models.Track{}}, nil
+	}
+
+	// Use the playlist manager to get playlist tracks
+	if playlistManager, ok := m.playlistAdder.(interface {
+		GetPlaylistTracks(playlistID, userID string, limit, offset int) (*models.PlaylistWithTracks, error)
+	}); ok {
+		playlistWithTracks, err := playlistManager.GetPlaylistTracks(playlistID, userID, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+
+		return &models.TrackList{
+			Tracks:  playlistWithTracks.Tracks,
+			Total:   playlistWithTracks.Total,
+			Limit:   playlistWithTracks.Limit,
+			Offset:  playlistWithTracks.Offset,
+			HasNext: playlistWithTracks.HasNext,
+		}, nil
+	}
+
+	return &models.TrackList{Tracks: []*models.Track{}}, nil
+}
+
 // GetStreamInfo returns information needed for streaming
 func (m *Manager) GetStreamInfo(trackID string) (*models.Track, error) {
 	return m.repo.GetTrackByID(trackID)
@@ -181,8 +250,8 @@ func (m *Manager) GetStreamInfo(trackID string) (*models.Track, error) {
 // GetAvailableAPIs returns the list of available track APIs
 func (m *Manager) GetAvailableAPIs() []string {
 	return []string{
-		"POST /api/tracks - Upload track (multipart)",
-		"GET /api/tracks - List tracks (with search/pagination)",
+		"POST /api/tracks - Upload track (multipart, optional playlist_id)",
+		"GET /api/tracks - List tracks (with search/pagination/playlist filtering)",
 		"GET /api/tracks/:id - Get track metadata",
 		"GET /api/tracks/:id/stream - Stream audio (with Range support)",
 		"DELETE /api/tracks/:id - Delete track",

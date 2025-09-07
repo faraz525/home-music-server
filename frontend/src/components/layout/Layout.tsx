@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Library, LogOut, PlusCircle, Settings, UserPlus } from 'lucide-react'
+import { Library, LogOut, PlusCircle, Settings, UserPlus, Music } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 
@@ -14,6 +14,7 @@ export function Layout() {
           </div>
           <nav className="space-y-1">
             <NavItem to="/" label="Library" icon={<Library size={18} />} />
+            <NavItem to="/playlists" label="Playlists" icon={<Music size={18} />} />
             {user?.role === 'admin' && (
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
             )}

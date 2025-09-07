@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/faraz525/home-music-server/backend/auth"
+	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/tracks"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
@@ -34,6 +35,7 @@ func main() {
 	// Initialize repositories
 	authRepo := auth.NewRepository(db)
 	tracksRepo := tracks.NewRepository(db)
+	playlistsRepo := playlists.NewRepository(db)
 	fmt.Printf("[CrateDrop] Repositories initialized\n")
 
 	// Initialize managers
@@ -45,6 +47,17 @@ func main() {
 
 	tracksManager := tracks.NewManager(tracksRepo)
 	fmt.Printf("[CrateDrop] Tracks manager initialized\n")
+
+	playlistsManager := playlists.NewManager(playlistsRepo)
+	fmt.Printf("[CrateDrop] Playlists manager initialized\n")
+
+	// Set playlist creator for auth manager to create default playlists on signup
+	authManager.SetPlaylistCreator(playlistsManager)
+	fmt.Printf("[CrateDrop] Playlist creator set for auth manager\n")
+
+	// Set playlist adder for tracks manager to add uploaded tracks to playlists
+	tracksManager.SetPlaylistAdder(playlistsManager)
+	fmt.Printf("[CrateDrop] Playlist adder set for tracks manager\n")
 
 	// Initialize Gin router with custom logging
 	r := gin.New()
@@ -125,6 +138,24 @@ func main() {
 				trackRoutes.GET("/:id/stream", tracks.StreamHandler(tracksManager))
 				trackRoutes.DELETE("/:id", tracks.DeleteHandler(tracksManager))
 			}
+
+			// Playlist routes
+			playlistRoutes := protected.Group("/playlists")
+			{
+				playlistRoutes.POST("", playlists.CreatePlaylistHandler(playlistsManager))
+				playlistRoutes.GET("", playlists.GetPlaylistsHandler(playlistsManager))
+				playlistRoutes.GET("/:id", playlists.GetPlaylistHandler(playlistsManager))
+				playlistRoutes.PUT("/:id", playlists.UpdatePlaylistHandler(playlistsManager))
+				playlistRoutes.DELETE("/:id", playlists.DeletePlaylistHandler(playlistsManager))
+
+				// Playlist track management
+				playlistRoutes.POST("/:id/tracks", playlists.AddTracksToPlaylistHandler(playlistsManager))
+				playlistRoutes.DELETE("/:id/tracks", playlists.RemoveTracksFromPlaylistHandler(playlistsManager))
+				playlistRoutes.GET("/:id/tracks", playlists.GetPlaylistTracksHandler(playlistsManager))
+			}
+
+			// Unsorted tracks endpoint (tracks not in any playlist)
+			protected.GET("/tracks/unsorted", playlists.GetUnsortedTracksHandler(playlistsManager))
 		}
 	}
 

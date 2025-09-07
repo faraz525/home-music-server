@@ -58,13 +58,14 @@ type LoginRequest struct {
 
 // UploadTrackRequest represents a track upload request
 type UploadTrackRequest struct {
-	Title      string `form:"title"`
-	Artist     string `form:"artist"`
-	Album      string `form:"album"`
-	Genre      string `form:"genre"`
-	Year       int    `form:"year"`
-	SampleRate int    `form:"sample_rate"`
-	Bitrate    int    `form:"bitrate"`
+	Title      string  `form:"title"`
+	Artist     string  `form:"artist"`
+	Album      string  `form:"album"`
+	Genre      string  `form:"genre"`
+	Year       int     `form:"year"`
+	SampleRate int     `form:"sample_rate"`
+	Bitrate    int     `form:"bitrate"`
+	PlaylistID *string `form:"playlist_id"` // Optional playlist to add track to
 }
 
 // Tokens represents the response containing access and refresh tokens
@@ -94,4 +95,61 @@ type TrackList struct {
 	Limit   int      `json:"limit"`
 	Offset  int      `json:"offset"`
 	HasNext bool     `json:"has_next"`
+}
+
+// Playlist represents a user-created playlist
+type Playlist struct {
+	ID          string    `json:"id"`
+	OwnerUserID string    `json:"owner_user_id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	IsDefault   bool      `json:"is_default"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PlaylistTrack represents the junction between playlists and tracks
+type PlaylistTrack struct {
+	ID         string    `json:"id"`
+	PlaylistID string    `json:"playlist_id"`
+	TrackID    string    `json:"track_id"`
+	AddedAt    time.Time `json:"added_at"`
+}
+
+// PlaylistWithTracks represents a playlist with its associated tracks
+type PlaylistWithTracks struct {
+	Playlist Playlist `json:"playlist"`
+	Tracks   []*Track `json:"tracks"`
+	Total    int      `json:"total"`
+	Limit    int      `json:"limit"`
+	Offset   int      `json:"offset"`
+	HasNext  bool     `json:"has_next"`
+}
+
+// PlaylistList represents a paginated list of playlists
+type PlaylistList struct {
+	Playlists []*Playlist `json:"playlists"`
+	Total     int         `json:"total"`
+	Limit     int         `json:"limit"`
+	Offset    int         `json:"offset"`
+	HasNext   bool        `json:"has_next"`
+}
+
+// Playlist API Request/Response types
+type CreatePlaylistRequest struct {
+	Name        string  `json:"name" binding:"required,min=1,max=100"`
+	Description *string `json:"description,omitempty"`
+}
+
+type UpdatePlaylistRequest struct {
+	Name        string  `json:"name" binding:"required,min=1,max=100"`
+	Description *string `json:"description,omitempty"`
+}
+
+type AddTracksToPlaylistRequest struct {
+	TrackIDs []string `json:"track_ids" binding:"required,min=1"`
+}
+
+type RemoveTracksFromPlaylistRequest struct {
+	TrackIDs []string `json:"track_ids" binding:"required,min=1"`
 }
