@@ -281,6 +281,12 @@ docker compose restart
 ### Local Development
 
 ```bash
+# Quick local deployment (recommended)
+./deploy-local.sh
+
+# Or manually with Docker Compose
+docker compose up -d --build
+
 # Backend development
 cd backend
 go mod download
@@ -293,6 +299,16 @@ npm run dev
 
 # Full stack with Docker
 docker compose -f docker-compose.dev.yml up
+```
+
+#### Local vs Production Deployment
+
+- **Local Development**: Uses `./data/cratedrop` directory (automatically configured via `docker-compose.override.yml`)
+- **Production/Raspberry Pi**: Uses `/mnt/music/cratedrop` directory (configured in main `docker-compose.yml`)
+
+To deploy to production:
+```bash
+./deploy-prod.sh
 ```
 
 ### Building

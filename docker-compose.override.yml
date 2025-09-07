@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  backend:
+    volumes:
+      # Override for local development - uses project-relative data directory
+      - ./data/cratedrop:/data:rw
+    environment:
+      # Override DATA_DIR to use local path (optional, since it's already /data in container)
+      DATA_DIR: /data
