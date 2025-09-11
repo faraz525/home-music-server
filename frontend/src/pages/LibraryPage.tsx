@@ -1,11 +1,14 @@
 import { api, playlistsApi, tracksApi } from '../lib/api'
+import type { UnsortedParams } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
-import { ChevronDown, Plus, Music, MoreHorizontal, ListPlus } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { ChevronDown, Plus, Music, MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
 import { Playlist, PlaylistList, Track, TrackList } from '../types/playlists'
 
 export function LibraryPage() {
-  const { play } = usePlayer()
+  const { play, isPlaying, toggle, queue, index } = usePlayer()
+  const current = queue[index]
   const [q, setQ] = useState('')
   const [selectedPlaylist, setSelectedPlaylist] = useState<string>('all')
   const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
@@ -16,6 +19,8 @@ export function LibraryPage() {
   const [progress, setProgress] = useState(0)
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Fetch playlists
   const fetchPlaylists = async () => {
@@ -38,7 +43,8 @@ export function LibraryPage() {
     try {
       let data
       if (selectedPlaylist === 'unsorted') {
-        const response = await tracksApi.getUnsorted({ q: q || undefined })
+        const params: UnsortedParams = { q: q || undefined }
+        const response = await tracksApi.getUnsorted(params)
         data = response.data
       } else if (selectedPlaylist && selectedPlaylist !== 'all') {
         const response = await api.get('/api/tracks', {
@@ -67,6 +73,25 @@ export function LibraryPage() {
   useEffect(() => {
     fetchPlaylists()
   }, [])
+
+  // Sync selected playlist with URL (?playlist=<id>|all|unsorted)
+  useEffect(() => {
+    const p = searchParams.get('playlist')
+    if (p && p !== selectedPlaylist) {
+      setSelectedPlaylist(p)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    // update URL when selection changes
+    const curr = searchParams.get('playlist')
+    if (selectedPlaylist !== (curr || 'all')) {
+      const next = new URLSearchParams(searchParams)
+      if (selectedPlaylist && selectedPlaylist !== 'all') next.set('playlist', selectedPlaylist)
+      else next.delete('playlist')
+      setSearchParams(next, { replace: true })
+    }
+  }, [selectedPlaylist])
 
   useEffect(() => {
     fetchTracks()
@@ -140,6 +165,52 @@ export function LibraryPage() {
     }
   }
 
+  // Bulk actions
+  async function bulkAddToPlaylist(playlistId: string) {
+    try {
+      const ids = Array.from(selectedTrackIds)
+      if (ids.length === 0) return
+      await playlistsApi.addTracks(playlistId, ids)
+      setSelectedTrackIds(new Set())
+      await fetchTracks()
+      await fetchPlaylists()
+    } catch (error) {
+      console.error('Failed bulk add:', error)
+    }
+  }
+
+  async function bulkRemoveFromCurrentPlaylist() {
+    try {
+      if (!selectedPlaylist || selectedPlaylist === 'all' || selectedPlaylist === 'unsorted') return
+      const ids = Array.from(selectedTrackIds)
+      if (ids.length === 0) return
+      await playlistsApi.removeTracks(selectedPlaylist, ids)
+      setSelectedTrackIds(new Set())
+      await fetchTracks()
+      await fetchPlaylists()
+    } catch (error) {
+      console.error('Failed bulk remove:', error)
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedTrackIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function clearSelection() { setSelectedTrackIds(new Set()) }
+
+  function formatDuration(totalSeconds?: number) {
+    if (!totalSeconds || totalSeconds <= 0) return '—'
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = Math.floor(totalSeconds % 60)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
   // Get the selected playlist name for display
   const selectedPlaylistName = selectedPlaylist === 'all' ? 'All Tracks' :
     selectedPlaylist === 'unsorted' ? 'Unsorted' :
@@ -147,6 +218,39 @@ export function LibraryPage() {
 
   return (
     <div className="space-y-6">
+      {/* Bulk selection toolbar */}
+      {selectedTrackIds.size > 0 && (
+        <div className="card p-3 flex flex-wrap items-center gap-3">
+          <div className="text-sm">{selectedTrackIds.size} selected</div>
+          <div className="relative">
+            <button className="btn btn-primary" onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}>
+              Add to playlist
+            </button>
+            {showPlaylistDropdown && (
+              <div className="playlist-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-10">
+                {loadingPlaylists ? (
+                  <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading playlists...</div>
+                ) : (
+                  playlists.playlists?.filter(p => !p.is_default).map((p) => (
+                    <button
+                      key={p.id}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A]"
+                      onClick={() => { bulkAddToPlaylist(p.id); setShowPlaylistDropdown(false) }}
+                    >
+                      {p.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          {selectedPlaylist && selectedPlaylist !== 'all' && selectedPlaylist !== 'unsorted' && (
+            <button className="btn" onClick={bulkRemoveFromCurrentPlaylist}>Remove from this playlist</button>
+          )}
+          <button className="btn" onClick={clearSelection}>Clear selection</button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Playlist Selector */}
         <div className="relative">
@@ -233,41 +337,71 @@ export function LibraryPage() {
         </form>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.isArray(tracks.tracks) && tracks.tracks.map((t) => (
-          <div key={t.id} className="card p-4 flex flex-col gap-2 group">
-            <div className="text-base font-semibold truncate">{t.title || t.original_filename}</div>
-            <div className="text-sm text-[#A1A1A1] truncate">{t.artist || 'Unknown Artist'}</div>
+      <div className="card p-0 overflow-hidden">
+        {/* Header row */}
+        <div className="px-4 py-2 text-xs uppercase tracking-wide text-[#A1A1A1] grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 border-b border-[#2A2A2A]">
+          <input
+            type="checkbox"
+            checked={tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
+            onChange={(e) => {
+              if (e.target.checked) setSelectedTrackIds(new Set(tracks.tracks.map(t => t.id)))
+              else clearSelection()
+            }}
+          />
+          <div className="col-span-1">Title</div>
+          <div>Album</div>
+          <div className="text-right pr-4">Date added</div>
+          <div className="text-right">Duration</div>
+          <div></div>
+        </div>
 
-            <div className="mt-2 flex gap-2 items-center">
-              <button
-                className="btn btn-primary flex-1"
-                onClick={() => play({ id: t.id, title: t.title, artist: t.artist, streamUrl: `/api/tracks/${t.id}/stream` }, true)}
-              >
-                Play
-              </button>
-
-              {/* Track Menu */}
-              <div className="relative">
+        {/* Rows */}
+        {Array.isArray(tracks.tracks) && tracks.tracks.map((t, idx) => {
+          const isCurrent = current?.id === t.id
+          const isCurrentAndPlaying = isCurrent && isPlaying
+          return (
+            <div key={t.id} className="px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A]">
+              <input
+                type="checkbox"
+                checked={selectedTrackIds.has(t.id)}
+                onChange={() => toggleSelected(t.id)}
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    className="btn btn-primary p-1 h-7 w-7 flex items-center justify-center"
+                    title={isCurrentAndPlaying ? 'Pause' : 'Play'}
+                    onClick={() => {
+                      if (isCurrent) toggle()
+                      else play({ id: t.id, title: t.title, artist: t.artist, streamUrl: `/api/tracks/${t.id}/stream` }, true)
+                    }}
+                  >
+                    {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  </button>
+                  <div className="min-w-0">
+                    <div className="truncate">{t.title || t.original_filename}</div>
+                    <div className="text-sm text-[#A1A1A1] truncate">{t.artist || 'Unknown Artist'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="truncate">{t.album || '—'}</div>
+              <div className="text-right pr-4 text-sm text-[#A1A1A1]">{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</div>
+              <div className="text-right text-sm text-[#A1A1A1]">{formatDuration(t.duration_seconds)}</div>
+              <div className="relative justify-self-end">
                 <button
                   className="btn p-2"
                   onClick={() => setTrackMenuOpen(trackMenuOpen === t.id ? null : t.id)}
                 >
                   <MoreHorizontal size={16} />
                 </button>
-
                 {trackMenuOpen === t.id && (
                   <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-20">
-                    {/* Add to Playlist Options */}
-                    <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">
-                      Add to Playlist
-                    </div>
-
+                    <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">Add to Playlist</div>
                     {loadingPlaylists ? (
                       <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading playlists...</div>
                     ) : (
                       playlists.playlists && playlists.playlists
-                        .filter(p => !p.is_default) // Don't show default playlist
+                        .filter(p => !p.is_default)
                         .map((playlist) => (
                           <button
                             key={playlist.id}
@@ -282,8 +416,6 @@ export function LibraryPage() {
                           </button>
                         ))
                     )}
-
-                    {/* Remove from Playlist (if viewing a specific playlist) */}
                     {selectedPlaylist && selectedPlaylist !== 'all' && selectedPlaylist !== 'unsorted' && (
                       <>
                         <div className="border-t border-[#2A2A2A] my-1"></div>
@@ -299,9 +431,7 @@ export function LibraryPage() {
                         </button>
                       </>
                     )}
-
                     <div className="border-t border-[#2A2A2A] my-1"></div>
-
                     <button
                       onClick={() => {
                         onDelete(t.id)
@@ -316,8 +446,8 @@ export function LibraryPage() {
                 )}
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

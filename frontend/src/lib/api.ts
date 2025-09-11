@@ -59,7 +59,8 @@ export const playlistsApi = {
 }
 
 // Unsorted tracks
+export type UnsortedParams = { limit?: number; offset?: number; q?: string }
 export const tracksApi = {
-  getUnsorted: (params?: { limit?: number; offset?: number }) =>
+  getUnsorted: (params?: UnsortedParams) =>
     api.get('/api/tracks/unsorted', { params }),
 }

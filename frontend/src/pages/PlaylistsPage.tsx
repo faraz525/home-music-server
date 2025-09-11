@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Edit, Trash2, Music, MoreHorizontal } from 'lucide-react'
 import { playlistsApi } from '../lib/api'
 import { Playlist, PlaylistList, CreatePlaylistRequest, UpdatePlaylistRequest } from '../types/playlists'
@@ -10,17 +11,27 @@ export function PlaylistsPage() {
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null)
   const [createForm, setCreateForm] = useState<CreatePlaylistRequest>({ name: '', description: '' })
   const [updateForm, setUpdateForm] = useState<UpdatePlaylistRequest>({ name: '', description: '' })
+  const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     fetchPlaylists()
   }, [])
 
+  useEffect(() => {
+    if (searchParams.get('create') === '1') setShowCreateModal(true)
+  }, [searchParams])
+
   const fetchPlaylists = async () => {
     try {
       const { data } = await playlistsApi.list()
-      setPlaylists(data)
+      // Ensure safe structure
+      const safe: PlaylistList = data && Array.isArray(data.playlists)
+        ? data
+        : { playlists: [], total: 0, limit: 20, offset: 0, has_next: false }
+      setPlaylists(safe)
     } catch (error) {
       console.error('Failed to fetch playlists:', error)
+      setPlaylists({ playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
     } finally {
       setLoading(false)
     }
@@ -34,6 +45,9 @@ export function PlaylistsPage() {
       await playlistsApi.create(createForm)
       setCreateForm({ name: '', description: '' })
       setShowCreateModal(false)
+      const next = new URLSearchParams(searchParams)
+      next.delete('create')
+      setSearchParams(next, { replace: true })
       await fetchPlaylists()
     } catch (error) {
       console.error('Failed to create playlist:', error)
@@ -100,7 +114,7 @@ export function PlaylistsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {playlists.playlists.map((playlist) => (
+        {Array.isArray(playlists.playlists) && playlists.playlists.map((playlist) => (
           <div key={playlist.id} className="card p-4 group">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3 flex-1">
@@ -155,7 +169,7 @@ export function PlaylistsPage() {
         ))}
       </div>
 
-      {playlists.playlists.length === 0 && (
+      {(!Array.isArray(playlists.playlists) || playlists.playlists.length === 0) && (
         <div className="text-center py-12">
           <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
           <h3 className="text-lg font-semibold mb-2">No playlists yet</h3>
@@ -207,6 +221,9 @@ export function PlaylistsPage() {
                   onClick={() => {
                     setShowCreateModal(false)
                     setCreateForm({ name: '', description: '' })
+                    const next = new URLSearchParams(searchParams)
+                    next.delete('create')
+                    setSearchParams(next, { replace: true })
                   }}
                   className="btn flex-1"
                 >
