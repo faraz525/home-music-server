@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
 
 // GenerateID generates a unique ID with a prefix
@@ -64,8 +64,8 @@ func BuildTrackFilePath(userID, trackID, filename string) string {
 }
 
 // NewAPIResponse creates a new API response
-func NewAPIResponse(success bool, data interface{}, err *models.APIError) *models.APIResponse {
-	return &models.APIResponse{
+func NewAPIResponse(success bool, data interface{}, err *imodels.APIError) *imodels.APIResponse {
+	return &imodels.APIResponse{
 		Success: success,
 		Data:    data,
 		Error:   err,
@@ -73,17 +73,17 @@ func NewAPIResponse(success bool, data interface{}, err *models.APIError) *model
 }
 
 // NewAPIError creates a new API error
-func NewAPIError(code, message string) *models.APIError {
-	return &models.APIError{
+func NewAPIError(code, message string) *imodels.APIError {
+	return &imodels.APIError{
 		Code:    code,
 		Message: message,
 	}
 }
 
 // NewTrackList creates a new paginated track list
-func NewTrackList(tracks []*models.Track, total, limit, offset int) *models.TrackList {
+func NewTrackList(tracks []*imodels.Track, total, limit, offset int) *imodels.TrackList {
 	hasNext := offset+limit < total
-	return &models.TrackList{
+	return &imodels.TrackList{
 		Tracks:  tracks,
 		Total:   total,
 		Limit:   limit,
@@ -91,3 +91,6 @@ func NewTrackList(tracks []*models.Track, total, limit, offset int) *models.Trac
 		HasNext: hasNext,
 	}
 }
+
+// Now centralizes time access for testability
+func Now() time.Time { return time.Now() }

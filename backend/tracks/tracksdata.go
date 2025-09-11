@@ -1,25 +1,28 @@
 package tracks
 
 import (
-	"github.com/faraz525/home-music-server/backend/models"
+	"context"
+
+	"github.com/faraz525/home-music-server/backend/internal/db"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
-// Repository handles track data operations
+// Data handles track data operations
 type Repository struct {
-	db *utils.DB
+	db *db.DB
 }
 
-// NewRepository creates a new tracks repository
-func NewRepository(db *utils.DB) *Repository {
+// NewRepository creates a new tracks data
+func NewRepository(db *db.DB) *Repository {
 	return &Repository{db: db}
 }
 
 // CreateTrack creates a new track in the database
-func (r *Repository) CreateTrack(track *models.Track) (*models.Track, error) {
+func (r *Repository) CreateTrack(ctx context.Context, track *imodels.Track) (*imodels.Track, error) {
 	id := utils.GenerateTrackID()
 
-	_, err := r.db.Exec(
+	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO tracks (id, owner_user_id, original_filename, content_type, size_bytes,
 			duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -36,20 +39,20 @@ func (r *Repository) CreateTrack(track *models.Track) (*models.Track, error) {
 }
 
 // GetTracks retrieves tracks for a user with pagination
-func (r *Repository) GetTracks(userID string, limit, offset int) ([]*models.Track, error) {
+func (r *Repository) GetTracks(ctx context.Context, userID string, limit, offset int) ([]*imodels.Track, error) {
 	query := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
 		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 		FROM tracks WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
-	rows, err := r.db.Query(query, userID, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*imodels.Track
 	for rows.Next() {
-		var track models.Track
+		var track imodels.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
 			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
@@ -65,7 +68,7 @@ func (r *Repository) GetTracks(userID string, limit, offset int) ([]*models.Trac
 }
 
 // GetAllTracks retrieves all tracks with optional search (admin only)
-func (r *Repository) GetAllTracks(limit, offset int, searchQuery string) ([]*models.Track, error) {
+func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, searchQuery string) ([]*imodels.Track, error) {
 	var query string
 	var args []interface{}
 
@@ -83,15 +86,15 @@ func (r *Repository) GetAllTracks(limit, offset int, searchQuery string) ([]*mod
 		args = []interface{}{limit, offset}
 	}
 
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*imodels.Track
 	for rows.Next() {
-		var track models.Track
+		var track imodels.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
 			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
@@ -107,9 +110,9 @@ func (r *Repository) GetAllTracks(limit, offset int, searchQuery string) ([]*mod
 }
 
 // GetTrackByID retrieves a single track by ID
-func (r *Repository) GetTrackByID(trackID string) (*models.Track, error) {
-	var track models.Track
-	err := r.db.QueryRow(
+func (r *Repository) GetTrackByID(ctx context.Context, trackID string) (*imodels.Track, error) {
+	var track imodels.Track
+	err := r.db.QueryRowContext(ctx,
 		`SELECT id, owner_user_id, original_filename, content_type, size_bytes,
 		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 		FROM tracks WHERE id = ?`,
@@ -126,42 +129,42 @@ func (r *Repository) GetTrackByID(trackID string) (*models.Track, error) {
 }
 
 // DeleteTrack deletes a track by ID
-func (r *Repository) DeleteTrack(trackID string) error {
-	_, err := r.db.Exec("DELETE FROM tracks WHERE id = ?", trackID)
+func (r *Repository) DeleteTrack(ctx context.Context, trackID string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM tracks WHERE id = ?", trackID)
 	return err
 }
 
 // GetTracksCount returns the total count of tracks for a user
-func (r *Repository) GetTracksCount(userID string) (int, error) {
+func (r *Repository) GetTracksCount(ctx context.Context, userID string) (int, error) {
 	var count int
-	err := r.db.QueryRow("SELECT COUNT(*) FROM tracks WHERE owner_user_id = ?", userID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tracks WHERE owner_user_id = ?", userID).Scan(&count)
 	return count, err
 }
 
 // GetAllTracksCount returns the total count of all tracks
-func (r *Repository) GetAllTracksCount() (int, error) {
+func (r *Repository) GetAllTracksCount(ctx context.Context) (int, error) {
 	var count int
-	err := r.db.QueryRow("SELECT COUNT(*) FROM tracks").Scan(&count)
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tracks").Scan(&count)
 	return count, err
 }
 
 // SearchTracks searches tracks by title, artist, album, genre, or filename
-func (r *Repository) SearchTracks(query string, userID string, limit, offset int) ([]*models.Track, error) {
+func (r *Repository) SearchTracks(ctx context.Context, query string, userID string, limit, offset int) ([]*imodels.Track, error) {
 	searchPattern := "%" + query + "%"
 	searchQuery := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
 		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
 		FROM tracks WHERE owner_user_id = ? AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR genre LIKE ? OR original_filename LIKE ?)
 		ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
-	rows, err := r.db.Query(searchQuery, userID, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset)
+	rows, err := r.db.QueryContext(ctx, searchQuery, userID, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*imodels.Track
 	for rows.Next() {
-		var track models.Track
+		var track imodels.Track
 		err := rows.Scan(
 			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
 			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
