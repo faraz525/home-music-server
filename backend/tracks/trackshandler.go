@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
 
 type UploadRequest struct {
@@ -43,7 +41,7 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 		fmt.Printf("[CrateDrop] File received: %s (%d bytes)\n", header.Filename, header.Size)
 
 		// Parse form data
-		var req models.UploadTrackRequest
+		var req imodels.UploadTrackRequest
 		if err := c.ShouldBind(&req); err != nil {
 			fmt.Printf("[CrateDrop] Form binding failed: %v\n", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "invalid_form", "message": err.Error()}})
@@ -52,7 +50,7 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 
 		fmt.Printf("[CrateDrop] Form data: Title=%s, Artist=%s, Album=%s\n", req.Title, req.Artist, req.Album)
 
-		track, err := manager.UploadTrack(userID.(string), header, &req)
+		track, err := manager.UploadTrack(c.Request.Context(), userID.(string), header, &req)
 		if err != nil {
 			fmt.Printf("[CrateDrop] Upload failed: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "upload_failed", "message": err.Error()}})
@@ -85,7 +83,7 @@ func ListHandler(manager *Manager) gin.HandlerFunc {
 			offset = 0
 		}
 
-		var trackList *models.TrackList
+		var trackList *imodels.TrackList
 
 		// Handle playlist-based queries
 		if playlistID != "" {
@@ -98,16 +96,16 @@ func ListHandler(manager *Manager) gin.HandlerFunc {
 			}
 		} else if userRole == "admin" && q != "" {
 			// Admin can search all tracks
-			trackList, err = manager.GetAllTracks(limit, offset, q)
+			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, q)
 		} else if userRole == "admin" {
 			// Admin can see all tracks
-			trackList, err = manager.GetAllTracks(limit, offset, "")
+			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, "")
 		} else if q != "" {
 			// Regular users can search their tracks
-			trackList, err = manager.SearchTracks(q, userID.(string), limit, offset)
+			trackList, err = manager.SearchTracks(c.Request.Context(), q, userID.(string), limit, offset)
 		} else {
 			// Regular users see only their tracks
-			trackList, err = manager.GetTracks(userID.(string), limit, offset)
+			trackList, err = manager.GetTracks(c.Request.Context(), userID.(string), limit, offset)
 		}
 
 		if err != nil {
@@ -125,7 +123,7 @@ func GetHandler(manager *Manager) gin.HandlerFunc {
 		userID, _ := c.Get("user_id")
 		userRole, _ := c.Get("user_role")
 
-		track, err := manager.GetTrack(trackID)
+		track, err := manager.GetTrack(c.Request.Context(), trackID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
 			return
@@ -147,7 +145,7 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		userID, _ := c.Get("user_id")
 		userRole, _ := c.Get("user_role")
 
-		track, err := manager.GetStreamInfo(trackID)
+		track, err := manager.GetStreamInfo(c.Request.Context(), trackID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
 			return
@@ -159,34 +157,26 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Open file
-		filePath := filepath.Join(os.Getenv("DATA_DIR"), track.FilePath)
-		file, err := os.Open(filePath)
+		// Open file via manager/storage
+		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
 			return
 		}
 		defer file.Close()
 
-		// Get file info
-		stat, err := file.Stat()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to get file info"}})
-			return
-		}
-
 		// Handle range requests for seeking
 		rangeHeader := c.GetHeader("Range")
 		if rangeHeader != "" {
-			handleRangeRequest(c, file, stat.Size(), track.ContentType, rangeHeader)
+			handleRangeRequest(c, file, info.Size, track.ContentType, rangeHeader)
 			return
 		}
 
 		// Full file response
 		c.Header("Content-Type", track.ContentType)
-		c.Header("Content-Length", strconv.FormatInt(stat.Size(), 10))
+		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
 		c.Header("Accept-Ranges", "bytes")
-		c.File(filePath)
+		io.Copy(c.Writer, file)
 	}
 }
 
@@ -196,7 +186,7 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 		userID, _ := c.Get("user_id")
 		userRole, _ := c.Get("user_role")
 
-		track, err := manager.GetTrack(trackID)
+		track, err := manager.GetTrack(c.Request.Context(), trackID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
 			return
@@ -209,7 +199,7 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 		}
 
 		// Delete track (manager handles both file and database deletion)
-		if err := manager.DeleteTrack(trackID); err != nil {
+		if err := manager.DeleteTrack(c.Request.Context(), trackID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": err.Error()}})
 			return
 		}
@@ -219,7 +209,7 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 }
 
 // handleRangeRequest handles HTTP range requests for audio streaming
-func handleRangeRequest(c *gin.Context, file *os.File, fileSize int64, contentType, rangeHeader string) {
+func handleRangeRequest(c *gin.Context, file io.ReadSeeker, fileSize int64, contentType, rangeHeader string) {
 	// Parse range header (e.g., "bytes=0-1023")
 	rangeParts := strings.Split(strings.TrimPrefix(rangeHeader, "bytes="), "-")
 	if len(rangeParts) != 2 {
