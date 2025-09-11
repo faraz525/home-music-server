@@ -6,20 +6,23 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
-	"path/filepath"
 
+	"github.com/faraz525/home-music-server/backend/internal/media/metadata"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
+	"github.com/faraz525/home-music-server/backend/internal/storage"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
 // Manager handles track business logic and API management
 type Manager struct {
-	repo *Repository
+	repo      *Repository
+	storage   storage.Storage
+	extractor metadata.Extractor
 }
 
 // NewManager creates a new tracks manager
-func NewManager(repo *Repository) *Manager {
-	return &Manager{repo: repo}
+func NewManager(repo *Repository, storage storage.Storage, extractor metadata.Extractor) *Manager {
+	return &Manager{repo: repo, storage: storage, extractor: extractor}
 }
 
 // UploadTrack handles track upload with file processing
@@ -42,61 +45,71 @@ func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *mu
 		return nil, fmt.Errorf("file too large. Maximum size is 2GB")
 	}
 
-	// Generate track ID and file path
+	// Generate track ID and save via storage
 	trackID := utils.GenerateTrackID()
-	filename := fmt.Sprintf("%s%s", trackID, utils.GetFileExtension(fileHeader.Filename))
-	filePath := utils.BuildTrackFilePath(userID, trackID, filename)
-
-	// Ensure directory exists
-	fullPath := filepath.Join(os.Getenv("DATA_DIR"), filePath)
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create upload directory: %w", err)
-	}
-
-	// Save file temporarily
-	tempPath := fullPath + ".tmp"
-	tempFile, err := os.Create(tempPath)
+	filePath, size, storedContentType, err := m.storage.Save(ctx, userID, trackID, fileHeader.Filename, file.(io.Reader))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file: %w", err)
+		return nil, fmt.Errorf("failed to store file: %w", err)
 	}
-	defer os.Remove(tempPath) // Clean up temp file on error
+	if storedContentType != "" {
+		contentType = storedContentType
+	}
 
-	if _, err := io.Copy(tempFile, file); err != nil {
-		tempFile.Close()
-		return nil, fmt.Errorf("failed to save file: %w", err)
-	}
-	tempFile.Close()
-
-	// Move temp file to final location
-	if err := os.Rename(tempPath, fullPath); err != nil {
-		return nil, fmt.Errorf("failed to finalize upload: %w", err)
-	}
+	// Resolve full path for metadata extraction
+	fullPath, _ := m.storage.ResolveFullPath(filePath)
 
 	// Extract metadata from the audio file
 	fmt.Printf("[CrateDrop] Starting metadata extraction for file: %s\n", fullPath)
-	metadata, err := utils.ExtractMetadata(fullPath)
+	md, err := m.extractor.Extract(ctx, fullPath)
 	if err != nil {
-		// Log the error but don't fail - continue with basic info
-		fmt.Printf("[CrateDrop] Warning: failed to extract metadata: %v\n", err)
-		metadata = &utils.AudioMetadata{} // Empty metadata as fallback
+		fmt.Printf("[CrateDrop] Warning: metadata extraction failed: %v\n", err)
+		md = &metadata.AudioMetadata{}
 	}
 
 	// Create track record from metadata and request data
-	track := utils.CreateTrackFromMetadata(metadata, userID, fileHeader.Filename, contentType, filePath, fileHeader.Size, req)
-	fmt.Printf("[CrateDrop] Created track record: ID=%s, Title=%v, Artist=%v, Album=%v\n",
-		track.ID, track.Title, track.Artist, track.Album)
+	track := &imodels.Track{
+		OwnerUserID:      userID,
+		OriginalFilename: fileHeader.Filename,
+		ContentType:      contentType,
+		SizeBytes:        size,
+		FilePath:         filePath,
+		CreatedAt:        utils.Now(),
+		UpdatedAt:        utils.Now(),
+	}
+	if md.DurationSeconds > 0 {
+		d := md.DurationSeconds
+		track.DurationSeconds = &d
+	}
+	track.Title = utils.StringToPtr(firstNonEmpty(req.Title, derefString(md.Title)))
+	track.Artist = utils.StringToPtr(firstNonEmpty(req.Artist, derefString(md.Artist)))
+	track.Album = utils.StringToPtr(firstNonEmpty(req.Album, derefString(md.Album)))
+	if v := firstNonZero(req.Year, derefInt(md.Year)); v > 0 {
+		track.Year = &v
+	}
+	if v := firstNonZero(req.SampleRate, derefInt(md.SampleRate)); v > 0 {
+		track.SampleRate = &v
+	}
+	if v := firstNonZero(req.Bitrate, derefInt(md.Bitrate)); v > 0 {
+		track.Bitrate = &v
+	}
 
+	// Persist
 	fmt.Printf("[CrateDrop] Inserting track into database...\n")
 	track, err = m.repo.CreateTrack(ctx, track)
 	if err != nil {
-		// Clean up file if database insert fails
-		os.Remove(fullPath)
+		// Attempt cleanup
+		_ = m.storage.Delete(ctx, filePath)
 		fmt.Printf("[CrateDrop] Database insert failed: %v\n", err)
 		return nil, fmt.Errorf("failed to save track metadata: %w", err)
 	}
 	fmt.Printf("[CrateDrop] Track successfully saved with ID: %s\n", track.ID)
 
 	return track, nil
+}
+
+// OpenFile exposes storage Open for streaming
+func (m *Manager) OpenFile(ctx context.Context, relativePath string) (storage.ReadSeekCloser, storage.FileInfo, error) {
+	return m.storage.Open(ctx, relativePath)
 }
 
 // GetTracks retrieves tracks for a user with pagination
@@ -146,9 +159,8 @@ func (m *Manager) DeleteTrack(ctx context.Context, trackID string) error {
 		return fmt.Errorf("track not found: %w", err)
 	}
 
-	// Delete file
-	filePath := filepath.Join(os.Getenv("DATA_DIR"), track.FilePath)
-	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+	// Delete file via storage
+	if err := m.storage.Delete(ctx, track.FilePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
 
@@ -188,4 +200,32 @@ func (m *Manager) GetAvailableAPIs() []string {
 		"GET /api/tracks/:id/stream - Stream audio (with Range support)",
 		"DELETE /api/tracks/:id - Delete track",
 	}
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func firstNonZero(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }

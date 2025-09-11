@@ -71,3 +71,5 @@ CREATE TRIGGER IF NOT EXISTS update_tracks_updated_at
 BEGIN
     UPDATE tracks SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+

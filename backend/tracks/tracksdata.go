@@ -5,6 +5,7 @@ import (
 
 	"github.com/faraz525/home-music-server/backend/internal/db"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
+	"github.com/faraz525/home-music-server/backend/utils"
 )
 
 // Data handles track data operations
@@ -19,7 +20,7 @@ func NewRepository(db *db.DB) *Repository {
 
 // CreateTrack creates a new track in the database
 func (r *Repository) CreateTrack(ctx context.Context, track *imodels.Track) (*imodels.Track, error) {
-	id := generateTrackID()
+	id := utils.GenerateTrackID()
 
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO tracks (id, owner_user_id, original_filename, content_type, size_bytes,

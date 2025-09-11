@@ -6,6 +6,7 @@ import (
 
 	"github.com/faraz525/home-music-server/backend/internal/db"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
+	"github.com/faraz525/home-music-server/backend/utils"
 )
 
 // Data handles authentication data operations
@@ -20,7 +21,7 @@ func NewRepository(db *db.DB) *Repository {
 
 // CreateUser creates a new user in the database
 func (r *Repository) CreateUser(ctx context.Context, email, passwordHash, role string) (*imodels.User, error) {
-	id := generateUserID()
+	id := utils.GenerateUserID()
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
@@ -79,7 +80,7 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*imodels.User,
 
 // CreateRefreshToken creates a new refresh token
 func (r *Repository) CreateRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) (*imodels.RefreshToken, error) {
-	id := generateTokenID()
+	id := utils.GenerateTokenID()
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
