@@ -71,3 +71,41 @@ CREATE TRIGGER IF NOT EXISTS update_tracks_updated_at
 BEGIN
     UPDATE tracks SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Playlists table
+CREATE TABLE IF NOT EXISTS playlists (
+    id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    is_default BOOLEAN DEFAULT FALSE,  -- For "Unsorted" playlist
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+);
+
+-- Junction table for playlist-track relationships
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+    id TEXT PRIMARY KEY,
+    playlist_id TEXT NOT NULL,
+    track_id TEXT NOT NULL,
+    added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+    FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+    UNIQUE(playlist_id, track_id)  -- Prevent duplicate track assignments
+);
+
+-- Indexes for playlists
+CREATE INDEX IF NOT EXISTS idx_playlists_owner ON playlists(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_playlists_name ON playlists(name);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id);
+
+-- Triggers for playlist timestamps
+CREATE TRIGGER IF NOT EXISTS update_playlists_updated_at
+    AFTER UPDATE ON playlists
+    FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
+BEGIN
+    UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
