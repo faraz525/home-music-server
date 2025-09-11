@@ -1,13 +1,14 @@
 package tracks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
@@ -22,7 +23,7 @@ func NewManager(repo *Repository) *Manager {
 }
 
 // UploadTrack handles track upload with file processing
-func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, req *models.UploadTrackRequest) (*models.Track, error) {
+func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *multipart.FileHeader, req *imodels.UploadTrackRequest) (*imodels.Track, error) {
 	// Open uploaded file
 	file, err := fileHeader.Open()
 	if err != nil {
@@ -86,7 +87,7 @@ func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, r
 		track.ID, track.Title, track.Artist, track.Album)
 
 	fmt.Printf("[CrateDrop] Inserting track into database...\n")
-	track, err = m.repo.CreateTrack(track)
+	track, err = m.repo.CreateTrack(ctx, track)
 	if err != nil {
 		// Clean up file if database insert fails
 		os.Remove(fullPath)
@@ -99,13 +100,13 @@ func (m *Manager) UploadTrack(userID string, fileHeader *multipart.FileHeader, r
 }
 
 // GetTracks retrieves tracks for a user with pagination
-func (m *Manager) GetTracks(userID string, limit, offset int) (*models.TrackList, error) {
-	tracks, err := m.repo.GetTracks(userID, limit, offset)
+func (m *Manager) GetTracks(ctx context.Context, userID string, limit, offset int) (*imodels.TrackList, error) {
+	tracks, err := m.repo.GetTracks(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tracks: %w", err)
 	}
 
-	total, err := m.repo.GetTracksCount(userID)
+	total, err := m.repo.GetTracksCount(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count tracks: %w", err)
 	}
@@ -114,13 +115,13 @@ func (m *Manager) GetTracks(userID string, limit, offset int) (*models.TrackList
 }
 
 // GetAllTracks retrieves all tracks with search (admin only)
-func (m *Manager) GetAllTracks(limit, offset int, searchQuery string) (*models.TrackList, error) {
-	tracks, err := m.repo.GetAllTracks(limit, offset, searchQuery)
+func (m *Manager) GetAllTracks(ctx context.Context, limit, offset int, searchQuery string) (*imodels.TrackList, error) {
+	tracks, err := m.repo.GetAllTracks(ctx, limit, offset, searchQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tracks: %w", err)
 	}
 
-	total, err := m.repo.GetAllTracksCount()
+	total, err := m.repo.GetAllTracksCount(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count tracks: %w", err)
 	}
@@ -129,8 +130,8 @@ func (m *Manager) GetAllTracks(limit, offset int, searchQuery string) (*models.T
 }
 
 // GetTrack retrieves a single track
-func (m *Manager) GetTrack(trackID string) (*models.Track, error) {
-	track, err := m.repo.GetTrackByID(trackID)
+func (m *Manager) GetTrack(ctx context.Context, trackID string) (*imodels.Track, error) {
+	track, err := m.repo.GetTrackByID(ctx, trackID)
 	if err != nil {
 		return nil, fmt.Errorf("track not found: %w", err)
 	}
@@ -138,9 +139,9 @@ func (m *Manager) GetTrack(trackID string) (*models.Track, error) {
 }
 
 // DeleteTrack deletes a track and its file
-func (m *Manager) DeleteTrack(trackID string) error {
+func (m *Manager) DeleteTrack(ctx context.Context, trackID string) error {
 	// Get track info first
-	track, err := m.repo.GetTrackByID(trackID)
+	track, err := m.repo.GetTrackByID(ctx, trackID)
 	if err != nil {
 		return fmt.Errorf("track not found: %w", err)
 	}
@@ -152,7 +153,7 @@ func (m *Manager) DeleteTrack(trackID string) error {
 	}
 
 	// Delete from database
-	if err := m.repo.DeleteTrack(trackID); err != nil {
+	if err := m.repo.DeleteTrack(ctx, trackID); err != nil {
 		return fmt.Errorf("failed to delete track record: %w", err)
 	}
 
@@ -160,8 +161,8 @@ func (m *Manager) DeleteTrack(trackID string) error {
 }
 
 // SearchTracks searches tracks for a user
-func (m *Manager) SearchTracks(query, userID string, limit, offset int) (*models.TrackList, error) {
-	tracks, err := m.repo.SearchTracks(query, userID, limit, offset)
+func (m *Manager) SearchTracks(ctx context.Context, query, userID string, limit, offset int) (*imodels.TrackList, error) {
+	tracks, err := m.repo.SearchTracks(ctx, query, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search tracks: %w", err)
 	}
@@ -174,8 +175,8 @@ func (m *Manager) SearchTracks(query, userID string, limit, offset int) (*models
 }
 
 // GetStreamInfo returns information needed for streaming
-func (m *Manager) GetStreamInfo(trackID string) (*models.Track, error) {
-	return m.repo.GetTrackByID(trackID)
+func (m *Manager) GetStreamInfo(ctx context.Context, trackID string) (*imodels.Track, error) {
+	return m.repo.GetTrackByID(ctx, trackID)
 }
 
 // GetAvailableAPIs returns the list of available track APIs

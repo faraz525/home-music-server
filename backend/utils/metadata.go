@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
 
 // AudioMetadata represents metadata extracted from an audio file
@@ -148,10 +148,10 @@ func ExtractMetadata(filePath string) (*AudioMetadata, error) {
 }
 
 // CreateTrackFromMetadata creates a Track model from extracted metadata and request data
-func CreateTrackFromMetadata(metadata *AudioMetadata, userID, originalFilename, contentType, filePath string, sizeBytes int64, req *models.UploadTrackRequest) *models.Track {
+func CreateTrackFromMetadata(metadata *AudioMetadata, userID, originalFilename, contentType, filePath string, sizeBytes int64, req *imodels.UploadTrackRequest) *imodels.Track {
 	fmt.Printf("[CrateDrop] Creating track from metadata: %+v\n", metadata)
 
-	track := &models.Track{
+	track := &imodels.Track{
 		OwnerUserID:      userID,
 		OriginalFilename: originalFilename,
 		ContentType:      contentType,
@@ -163,7 +163,8 @@ func CreateTrackFromMetadata(metadata *AudioMetadata, userID, originalFilename, 
 
 	// Use metadata values as defaults, but allow request to override
 	if metadata.Duration > 0 {
-		track.DurationSeconds = &metadata.Duration
+		dur := metadata.Duration
+		track.DurationSeconds = &dur
 	}
 
 	// Title: use request if provided, otherwise metadata

@@ -3,27 +3,27 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/faraz525/home-music-server/backend/auth"
+	"github.com/faraz525/home-music-server/backend/internal/config"
+	idb "github.com/faraz525/home-music-server/backend/internal/db"
+	mlocal "github.com/faraz525/home-music-server/backend/internal/media/metadata/local"
 	"github.com/faraz525/home-music-server/backend/server"
+	slocal "github.com/faraz525/home-music-server/backend/internal/storage/local"
 	"github.com/faraz525/home-music-server/backend/tracks"
-	"github.com/faraz525/home-music-server/backend/utils"
 )
 
 func main() {
 	// Enhanced startup logging
 	fmt.Printf("[CrateDrop] Starting CrateDrop server at %s...\n", time.Now().Format("2006-01-02 15:04:05"))
 
-	// Initialize database
-	dataDir := os.Getenv("DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/mnt/music/cratedrop"
-	}
-	fmt.Printf("[CrateDrop] Using data directory: %s\n", dataDir)
+	// Load config
+	cfg := config.FromEnv()
+	fmt.Printf("[CrateDrop] Using data directory: %s\n", cfg.DataDir)
 
-	db, err := utils.NewDB(dataDir)
+	// Initialize database
+	db, err := idb.New(cfg.DataDir)
 	if err != nil {
 		log.Fatalf("[CrateDrop] Failed to initialize database: %v", err)
 	}
@@ -35,14 +35,16 @@ func main() {
 	tracksRepo := tracks.NewRepository(db)
 	fmt.Printf("[CrateDrop] Repositories initialized\n")
 
-	// Initialize managers
+	// Initialize managers and infra
 	authManager, err := auth.NewManager(authRepo)
 	if err != nil {
 		log.Fatalf("[CrateDrop] Failed to initialize auth manager: %v", err)
 	}
 	fmt.Printf("[CrateDrop] Auth manager initialized\n")
 
-	tracksManager := tracks.NewManager(tracksRepo)
+	storage := slocal.New(cfg.DataDir)
+	extractor := mlocal.New()
+	tracksManager := tracks.NewManager(tracksRepo, storage, extractor)
 	fmt.Printf("[CrateDrop] Tracks manager initialized\n")
 
 	// Initialize router and API group
@@ -54,7 +56,7 @@ func main() {
 	protected.Use(auth.AuthMiddleware())
 	tracks.Routes(tracksManager)(protected)
 
-	addr := "0.0.0.0:8080"
+	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)
 	fmt.Printf("[CrateDrop] API available at http://%s/api\n", addr)
 	fmt.Printf("[CrateDrop] Health check at http://%s/api/healthz\n", addr)
