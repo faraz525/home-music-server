@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/gin-gonic/gin"
 
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
@@ -62,7 +63,7 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 	}
 }
 
-func ListHandler(manager *Manager) gin.HandlerFunc {
+func ListHandler(manager *Manager, playlistsManager *playlists.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
 		userRole, _ := c.Get("user_role")
@@ -89,10 +90,22 @@ func ListHandler(manager *Manager) gin.HandlerFunc {
 		if playlistID != "" {
 			if playlistID == "unsorted" {
 				// Get tracks not in any playlist
-				trackList, err = manager.GetUnsortedTracks(userID.(string), limit, offset)
+				trackList, err = playlistsManager.GetUnsortedTracks(userID.(string), limit, offset)
 			} else {
 				// Get tracks from specific playlist
-				trackList, err = manager.GetPlaylistTracks(playlistID, userID.(string), limit, offset)
+				playlistWithTracks, playlistErr := playlistsManager.GetPlaylistTracks(playlistID, userID.(string), limit, offset)
+				if playlistErr != nil {
+					err = playlistErr
+				} else {
+					// Convert to TrackList format
+					trackList = &imodels.TrackList{
+						Tracks:  playlistWithTracks.Tracks,
+						Total:   playlistWithTracks.Total,
+						Limit:   playlistWithTracks.Limit,
+						Offset:  playlistWithTracks.Offset,
+						HasNext: playlistWithTracks.HasNext,
+					}
+				}
 			}
 		} else if userRole == "admin" && q != "" {
 			// Admin can search all tracks

@@ -15,7 +15,7 @@ import (
 
 // PlaylistCreator interface for creating default playlists
 type PlaylistCreator interface {
-	EnsureDefaultPlaylist(userID string) (*models.Playlist, error)
+	EnsureDefaultPlaylist(userID string) (*imodels.Playlist, error)
 }
 
 // Manager handles authentication business logic and API management

@@ -3,7 +3,7 @@ package playlists
 import (
 	"fmt"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
 
 // Manager handles business logic for playlists
@@ -17,7 +17,7 @@ func NewManager(repo *Repository) *Manager {
 }
 
 // CreatePlaylist creates a new playlist for a user
-func (m *Manager) CreatePlaylist(ownerUserID string, req *models.CreatePlaylistRequest) (*models.Playlist, error) {
+func (m *Manager) CreatePlaylist(ownerUserID string, req *imodels.CreatePlaylistRequest) (*imodels.Playlist, error) {
 	// Validate request
 	if req.Name == "" {
 		return nil, fmt.Errorf("playlist name cannot be empty")
@@ -41,7 +41,7 @@ func (m *Manager) CreatePlaylist(ownerUserID string, req *models.CreatePlaylistR
 }
 
 // GetUserPlaylists returns all playlists for a user
-func (m *Manager) GetUserPlaylists(userID string, limit, offset int) (*models.PlaylistList, error) {
+func (m *Manager) GetUserPlaylists(userID string, limit, offset int) (*imodels.PlaylistList, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -53,7 +53,7 @@ func (m *Manager) GetUserPlaylists(userID string, limit, offset int) (*models.Pl
 }
 
 // GetPlaylist returns a specific playlist with ownership validation
-func (m *Manager) GetPlaylist(playlistID, requestingUserID string) (*models.Playlist, error) {
+func (m *Manager) GetPlaylist(playlistID, requestingUserID string) (*imodels.Playlist, error) {
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (m *Manager) GetPlaylist(playlistID, requestingUserID string) (*models.Play
 }
 
 // UpdatePlaylist updates a playlist with ownership validation
-func (m *Manager) UpdatePlaylist(playlistID, requestingUserID string, req *models.UpdatePlaylistRequest) error {
+func (m *Manager) UpdatePlaylist(playlistID, requestingUserID string, req *imodels.UpdatePlaylistRequest) error {
 	// First check ownership
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
@@ -121,7 +121,7 @@ func (m *Manager) DeletePlaylist(playlistID, requestingUserID string) error {
 }
 
 // EnsureDefaultPlaylist creates the default "Unsorted" playlist if it doesn't exist
-func (m *Manager) EnsureDefaultPlaylist(userID string) (*models.Playlist, error) {
+func (m *Manager) EnsureDefaultPlaylist(userID string) (*imodels.Playlist, error) {
 	// Try to get existing default playlist
 	playlist, err := m.repo.GetDefaultPlaylist(userID)
 	if err == nil {
@@ -133,7 +133,7 @@ func (m *Manager) EnsureDefaultPlaylist(userID string) (*models.Playlist, error)
 }
 
 // AddTracksToPlaylist adds tracks to a playlist with validation
-func (m *Manager) AddTracksToPlaylist(playlistID, requestingUserID string, req *models.AddTracksToPlaylistRequest) error {
+func (m *Manager) AddTracksToPlaylist(playlistID, requestingUserID string, req *imodels.AddTracksToPlaylistRequest) error {
 	// Validate request
 	if len(req.TrackIDs) == 0 {
 		return fmt.Errorf("no track IDs provided")
@@ -160,7 +160,7 @@ func (m *Manager) AddTracksToPlaylist(playlistID, requestingUserID string, req *
 }
 
 // RemoveTracksFromPlaylist removes tracks from a playlist with validation
-func (m *Manager) RemoveTracksFromPlaylist(playlistID, requestingUserID string, req *models.RemoveTracksFromPlaylistRequest) error {
+func (m *Manager) RemoveTracksFromPlaylist(playlistID, requestingUserID string, req *imodels.RemoveTracksFromPlaylistRequest) error {
 	// Validate request
 	if len(req.TrackIDs) == 0 {
 		return fmt.Errorf("no track IDs provided")
@@ -184,7 +184,7 @@ func (m *Manager) RemoveTracksFromPlaylist(playlistID, requestingUserID string, 
 }
 
 // GetPlaylistTracks returns tracks for a playlist with ownership validation
-func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, offset int) (*models.PlaylistWithTracks, error) {
+func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, offset int) (*imodels.PlaylistWithTracks, error) {
 	// Check playlist ownership
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
@@ -206,7 +206,7 @@ func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, 
 }
 
 // GetUnsortedTracks returns tracks not in any playlist for a user
-func (m *Manager) GetUnsortedTracks(userID string, limit, offset int) (*models.TrackList, error) {
+func (m *Manager) GetUnsortedTracks(userID string, limit, offset int) (*imodels.TrackList, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -218,7 +218,7 @@ func (m *Manager) GetUnsortedTracks(userID string, limit, offset int) (*models.T
 }
 
 // GetDefaultPlaylist returns the default playlist for a user
-func (m *Manager) GetDefaultPlaylist(userID string) (*models.Playlist, error) {
+func (m *Manager) GetDefaultPlaylist(userID string) (*imodels.Playlist, error) {
 	return m.repo.GetDefaultPlaylist(userID)
 }
 

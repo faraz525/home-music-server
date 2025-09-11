@@ -4,24 +4,34 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/faraz525/home-music-server/backend/models"
-	"github.com/faraz525/home-music-server/backend/utils"
+	idb "github.com/faraz525/home-music-server/backend/internal/db"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/google/uuid"
 )
 
 // Repository handles database operations for playlists
 type Repository struct {
-	db *utils.DB
+	db *idb.DB
 }
 
 // NewRepository creates a new playlist repository
-func NewRepository(db *utils.DB) *Repository {
+func NewRepository(db *idb.DB) *Repository {
 	return &Repository{db: db}
 }
 
 // CreatePlaylist creates a new playlist for a user
-func (r *Repository) CreatePlaylist(ownerUserID string, req *models.CreatePlaylistRequest) (*models.Playlist, error) {
+func (r *Repository) CreatePlaylist(ownerUserID string, req *imodels.CreatePlaylistRequest) (*imodels.Playlist, error) {
 	id := uuid.New().String()
+
+	// Debug: Check if user exists
+	var userCount int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", ownerUserID).Scan(&userCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check user: %w", err)
+	}
+	if userCount == 0 {
+		return nil, fmt.Errorf("user not found: %s", ownerUserID)
+	}
 
 	query := `
 		INSERT INTO playlists (id, owner_user_id, name, description, is_default)
@@ -35,7 +45,7 @@ func (r *Repository) CreatePlaylist(ownerUserID string, req *models.CreatePlayli
 		description = nil
 	}
 
-	_, err := r.db.DB.Exec(query, id, ownerUserID, req.Name, description, false)
+	_, err = r.db.DB.Exec(query, id, ownerUserID, req.Name, description, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create playlist: %w", err)
 	}
@@ -44,7 +54,7 @@ func (r *Repository) CreatePlaylist(ownerUserID string, req *models.CreatePlayli
 }
 
 // GetUserPlaylists returns all playlists for a user
-func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*models.PlaylistList, error) {
+func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*imodels.PlaylistList, error) {
 	query := `
 		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
 		FROM playlists
@@ -59,9 +69,9 @@ func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*models
 	}
 	defer rows.Close()
 
-	var playlists []*models.Playlist
+	var playlists []*imodels.Playlist
 	for rows.Next() {
-		playlist := &models.Playlist{}
+		playlist := &imodels.Playlist{}
 		var description sql.NullString
 
 		err := rows.Scan(
@@ -94,7 +104,7 @@ func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*models
 
 	hasNext := offset+limit < total
 
-	return &models.PlaylistList{
+	return &imodels.PlaylistList{
 		Playlists: playlists,
 		Total:     total,
 		Limit:     limit,
@@ -104,14 +114,14 @@ func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*models
 }
 
 // GetPlaylist returns a specific playlist by ID
-func (r *Repository) GetPlaylist(playlistID string) (*models.Playlist, error) {
+func (r *Repository) GetPlaylist(playlistID string) (*imodels.Playlist, error) {
 	query := `
 		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
 		FROM playlists
 		WHERE id = ?
 	`
 
-	playlist := &models.Playlist{}
+	playlist := &imodels.Playlist{}
 	var description sql.NullString
 
 	err := r.db.QueryRow(query, playlistID).Scan(
@@ -139,7 +149,7 @@ func (r *Repository) GetPlaylist(playlistID string) (*models.Playlist, error) {
 }
 
 // UpdatePlaylist updates a playlist's information
-func (r *Repository) UpdatePlaylist(playlistID string, req *models.UpdatePlaylistRequest) error {
+func (r *Repository) UpdatePlaylist(playlistID string, req *imodels.UpdatePlaylistRequest) error {
 	query := `
 		UPDATE playlists
 		SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
@@ -204,7 +214,7 @@ func (r *Repository) DeletePlaylist(playlistID string) error {
 }
 
 // CreateDefaultPlaylist creates the default "Unsorted" playlist for a user
-func (r *Repository) CreateDefaultPlaylist(ownerUserID string) (*models.Playlist, error) {
+func (r *Repository) CreateDefaultPlaylist(ownerUserID string) (*imodels.Playlist, error) {
 	id := uuid.New().String()
 	name := "Unsorted"
 	description := "Tracks not assigned to any playlist"
@@ -223,14 +233,14 @@ func (r *Repository) CreateDefaultPlaylist(ownerUserID string) (*models.Playlist
 }
 
 // GetDefaultPlaylist returns the default playlist for a user
-func (r *Repository) GetDefaultPlaylist(userID string) (*models.Playlist, error) {
+func (r *Repository) GetDefaultPlaylist(userID string) (*imodels.Playlist, error) {
 	query := `
 		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
 		FROM playlists
 		WHERE owner_user_id = ? AND is_default = true
 	`
 
-	playlist := &models.Playlist{}
+	playlist := &imodels.Playlist{}
 	var description sql.NullString
 
 	err := r.db.QueryRow(query, userID).Scan(
@@ -331,7 +341,7 @@ func (r *Repository) RemoveTracksFromPlaylist(playlistID string, trackIDs []stri
 }
 
 // GetPlaylistTracks returns tracks for a specific playlist with pagination
-func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*models.PlaylistWithTracks, error) {
+func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*imodels.PlaylistWithTracks, error) {
 	// First get the playlist
 	playlist, err := r.GetPlaylist(playlistID)
 	if err != nil {
@@ -357,9 +367,9 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*m
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*imodels.Track
 	for rows.Next() {
-		var track models.Track
+		var track imodels.Track
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -396,8 +406,8 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*m
 
 	hasNext := offset+limit < total
 
-	return &models.PlaylistWithTracks{
-		Playlist: *playlist,
+	return &imodels.PlaylistWithTracks{
+		Playlist: playlist,
 		Tracks:   tracks,
 		Total:    total,
 		Limit:    limit,
@@ -407,7 +417,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*m
 }
 
 // GetTracksNotInPlaylist returns tracks that are not in any playlist for a user
-func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*models.TrackList, error) {
+func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*imodels.TrackList, error) {
 	query := `
 		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
@@ -429,9 +439,9 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*imodels.Track
 	for rows.Next() {
-		var track models.Track
+		var track imodels.Track
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -475,7 +485,7 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 
 	hasNext := offset+limit < total
 
-	return &models.TrackList{
+	return &imodels.TrackList{
 		Tracks:  tracks,
 		Total:   total,
 		Limit:   limit,
