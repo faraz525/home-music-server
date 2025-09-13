@@ -45,6 +45,7 @@ export function PlaylistsPage() {
       await playlistsApi.create(createForm)
       setCreateForm({ name: '', description: '' })
       setShowCreateModal(false)
+      window.dispatchEvent(new CustomEvent('playlists:updated'))
       const next = new URLSearchParams(searchParams)
       next.delete('create')
       setSearchParams(next, { replace: true })
@@ -62,6 +63,7 @@ export function PlaylistsPage() {
       await playlistsApi.update(editingPlaylist.id, updateForm)
       setEditingPlaylist(null)
       setUpdateForm({ name: '', description: '' })
+      window.dispatchEvent(new CustomEvent('playlists:updated'))
       await fetchPlaylists()
     } catch (error) {
       console.error('Failed to update playlist:', error)
@@ -75,6 +77,7 @@ export function PlaylistsPage() {
 
     try {
       await playlistsApi.delete(playlist.id)
+      window.dispatchEvent(new CustomEvent('playlists:updated'))
       await fetchPlaylists()
     } catch (error) {
       console.error('Failed to delete playlist:', error)

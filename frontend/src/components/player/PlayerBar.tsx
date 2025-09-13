@@ -4,31 +4,92 @@ import { usePlayer } from '../../state/player'
 
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const barRef = useRef<HTMLDivElement | null>(null)
   const { queue, index, next, prev, isPlaying, toggle } = usePlayer()
   const current = queue[index]
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     if (!audioRef.current) return
     const el = audioRef.current
     const onTime = () => setProgress(el.currentTime)
-    const onLoaded = () => setDuration(el.duration || 0)
+    const onLoaded = () => setDuration(isFinite(el.duration) ? el.duration : 0)
+    const onError = async () => {
+      try {
+        await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+      } catch (_) {
+        // ignore
+      }
+      // Retry loading the current source
+      try {
+        el.load()
+        if (isPlaying) {
+          await el.play().catch(() => {})
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
     el.addEventListener('timeupdate', onTime)
     el.addEventListener('loadedmetadata', onLoaded)
+    el.addEventListener('error', onError)
     return () => {
       el.removeEventListener('timeupdate', onTime)
       el.removeEventListener('loadedmetadata', onLoaded)
+      el.removeEventListener('error', onError)
     }
   }, [])
 
   useEffect(() => {
     if (!audioRef.current) return
+    // Reset state on track change
+    audioRef.current.currentTime = 0
+    setProgress(0)
+    setDuration(0)
     if (isPlaying) audioRef.current.play().catch(() => {})
     else audioRef.current.pause()
   }, [isPlaying, current])
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
+
+  function onSeek(e: React.MouseEvent<HTMLDivElement>) {
+    if (!audioRef.current || !barRef.current || !duration) return
+    const rect = barRef.current.getBoundingClientRect()
+    const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width)
+    const ratio = rect.width ? x / rect.width : 0
+    const nextTime = ratio * duration
+    audioRef.current.currentTime = nextTime
+    setProgress(nextTime)
+  }
+
+  useEffect(() => {
+    if (!dragging) return
+    function handleMove(ev: PointerEvent) {
+      if (!audioRef.current || !barRef.current || !duration) return
+      const rect = barRef.current.getBoundingClientRect()
+      const x = Math.min(Math.max(ev.clientX - rect.left, 0), rect.width)
+      const ratio = rect.width ? x / rect.width : 0
+      const nextTime = ratio * duration
+      audioRef.current.currentTime = nextTime
+      setProgress(nextTime)
+    }
+    function handleUp() { setDragging(false) }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+    }
+  }, [dragging, duration])
+
+  function formatTime(totalSeconds: number) {
+    if (!isFinite(totalSeconds) || totalSeconds <= 0) return '0:00'
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = Math.floor(totalSeconds % 60)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
 
   return (
     <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212]">
@@ -43,13 +104,24 @@ export function PlayerBar() {
           <SkipForward />
         </button>
 
-        <div className="flex-1">
-          <div className="h-1 rounded-full bg-[#2A2A2A]">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="min-w-0">
+            <div className="truncate text-sm">{current?.title || 'Unknown track'}</div>
+            <div className="truncate text-xs text-[#A1A1A1]">{current?.artist || 'Unknown artist'}</div>
+          </div>
+          <div className="text-xs tabular-nums text-[#A1A1A1] w-12 text-right">{formatTime(progress)}</div>
+          <div
+            ref={barRef}
+            className="h-1 rounded-full bg-[#2A2A2A] flex-1 cursor-pointer"
+            onClick={onSeek}
+            onPointerDown={() => setDragging(true)}
+          >
             <div className="h-1 rounded-full bg-[#1DB954]" style={{ width: `${pct}%` }} />
           </div>
+          <div className="text-xs tabular-nums text-[#A1A1A1] w-12">{formatTime(duration)}</div>
         </div>
 
-        <audio ref={audioRef} src={current?.streamUrl} preload="metadata" />
+        <audio ref={audioRef} src={current?.streamUrl} preload="metadata" crossOrigin="use-credentials" />
       </div>
     </div>
   )

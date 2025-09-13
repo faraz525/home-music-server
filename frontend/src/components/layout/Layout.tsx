@@ -14,12 +14,16 @@ export function Layout() {
 
   useEffect(() => {
     let mounted = true
-    playlistsApi.list().then(({ data }) => {
+    const load = () => playlistsApi.list().then(({ data }) => {
       if (!mounted) return
       const safe = data && Array.isArray(data.playlists) ? data : { playlists: [], total: 0, limit: 20, offset: 0, has_next: false }
       setPlaylists(safe)
     }).catch(() => {})
-    return () => { mounted = false }
+
+    load()
+    const handler = () => load()
+    window.addEventListener('playlists:updated', handler)
+    return () => { mounted = false; window.removeEventListener('playlists:updated', handler) }
   }, [location.pathname])
   return (
     <div className="min-h-screen grid grid-rows-[1fr_auto]">

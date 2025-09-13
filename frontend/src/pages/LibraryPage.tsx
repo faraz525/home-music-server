@@ -315,7 +315,16 @@ export function LibraryPage() {
                     title={isCurrentAndPlaying ? 'Pause' : 'Play'}
                     onClick={() => {
                       if (isCurrent) toggle()
-                      else play({ id: t.id, title: t.title, artist: t.artist, streamUrl: `/api/tracks/${t.id}/stream` }, true)
+                      else {
+                        const fallbackFromFilename = (() => {
+                          const name = t.original_filename || ''
+                          const noExt = name.includes('.') ? name.substring(0, name.lastIndexOf('.')) : name
+                          return noExt.slice(0, 60)
+                        })()
+                        const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
+                        const displayArtist = t.artist || 'Unknown artist'
+                        play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream` }, true)
+                      }
                     }}
                   >
                     {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} />}
