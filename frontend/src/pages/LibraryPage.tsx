@@ -3,14 +3,15 @@ import type { UnsortedParams } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, Plus, Music, MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
-import { Playlist, PlaylistList, Track, TrackList } from '../types/playlists'
+import { MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
+import { PlaylistList, TrackList } from '../types/playlists'
 
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index } = usePlayer()
   const current = queue[index]
   const [q, setQ] = useState('')
-  const [selectedPlaylist, setSelectedPlaylist] = useState<string>('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedPlaylist, setSelectedPlaylist] = useState<string>(() => searchParams.get('playlist') || 'all')
   const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [playlists, setPlaylists] = useState<PlaylistList>({ playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [loadingPlaylists, setLoadingPlaylists] = useState(true)
@@ -20,7 +21,6 @@ export function LibraryPage() {
   const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
-  const [searchParams, setSearchParams] = useSearchParams()
 
   // Fetch playlists
   const fetchPlaylists = async () => {
@@ -74,24 +74,28 @@ export function LibraryPage() {
     fetchPlaylists()
   }, [])
 
-  // Sync selected playlist with URL (?playlist=<id>|all|unsorted)
+  // Keep selected playlist in sync with URL (?playlist=<id>|unsorted or none => all)
   useEffect(() => {
     const p = searchParams.get('playlist')
-    if (p && p !== selectedPlaylist) {
-      setSelectedPlaylist(p)
+    const next = p || 'all'
+    if (next !== selectedPlaylist) {
+      setSelectedPlaylist(next)
     }
   }, [searchParams])
 
+  // Only push to URL if the change originated from in-page actions (not from URL itself)
+  const [lastUrlPlaylist, setLastUrlPlaylist] = useState<string | null>(searchParams.get('playlist'))
   useEffect(() => {
-    // update URL when selection changes
-    const curr = searchParams.get('playlist')
-    if (selectedPlaylist !== (curr || 'all')) {
+    const curr = searchParams.get('playlist') || 'all'
+    // If selectedPlaylist differs from the URL and the URL hasn't just changed, update URL
+    if (selectedPlaylist !== curr && lastUrlPlaylist === curr) {
       const next = new URLSearchParams(searchParams)
       if (selectedPlaylist && selectedPlaylist !== 'all') next.set('playlist', selectedPlaylist)
       else next.delete('playlist')
       setSearchParams(next, { replace: true })
     }
-  }, [selectedPlaylist])
+    setLastUrlPlaylist(searchParams.get('playlist'))
+  }, [selectedPlaylist, searchParams])
 
   useEffect(() => {
     fetchTracks()
@@ -211,10 +215,7 @@ export function LibraryPage() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  // Get the selected playlist name for display
-  const selectedPlaylistName = selectedPlaylist === 'all' ? 'All Tracks' :
-    selectedPlaylist === 'unsorted' ? 'Unsorted' :
-    playlists.playlists?.find(p => p.id === selectedPlaylist)?.name || 'All Tracks'
+  // selected playlist is controlled by the URL and sidebar links
 
   return (
     <div className="space-y-6">
@@ -252,65 +253,6 @@ export function LibraryPage() {
       )}
 
       <div className="flex flex-col sm:flex-row gap-3">
-        {/* Playlist Selector */}
-        <div className="relative">
-          <button
-            onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}
-            className="btn flex items-center gap-2 min-w-[200px]"
-          >
-            <Music size={16} />
-            {selectedPlaylistName}
-            <ChevronDown size={14} className="ml-auto" />
-          </button>
-
-          {showPlaylistDropdown && (
-            <div className="playlist-dropdown absolute top-full mt-1 w-full bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-10">
-              <button
-                onClick={() => {
-                  setSelectedPlaylist('all')
-                  setShowPlaylistDropdown(false)
-                }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
-              >
-                <Music size={14} />
-                All Tracks
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedPlaylist('unsorted')
-                  setShowPlaylistDropdown(false)
-                }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
-              >
-                <Music size={14} />
-                Unsorted
-              </button>
-
-              <div className="border-t border-[#2A2A2A] my-1"></div>
-
-              {loadingPlaylists ? (
-                <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading playlists...</div>
-              ) : (
-                playlists.playlists?.map((playlist) => (
-                <button
-                  key={playlist.id}
-                  onClick={() => {
-                    setSelectedPlaylist(playlist.id)
-                    setShowPlaylistDropdown(false)
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
-                >
-                  <Music size={14} />
-                  {playlist.name}
-                  {playlist.is_default && <span className="text-xs text-[#A1A1A1]">(Default)</span>}
-                </button>
-              ))
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Search Input */}
         <div className="flex items-center gap-3 flex-1">
           <input

@@ -14,7 +14,13 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const payload = res?.data
+    if (payload && typeof payload === 'object' && 'success' in payload && 'data' in payload) {
+      return { ...res, data: (payload as any).data }
+    }
+    return res
+  },
   async (error) => {
     if (error.response?.status === 401) {
       try {
@@ -62,5 +68,5 @@ export const playlistsApi = {
 export type UnsortedParams = { limit?: number; offset?: number; q?: string }
 export const tracksApi = {
   getUnsorted: (params?: UnsortedParams) =>
-    api.get('/api/tracks/unsorted', { params }),
+    api.get('/api/tracks', { params: { ...(params || {}), playlist_id: 'unsorted' } }),
 }

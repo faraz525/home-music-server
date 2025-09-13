@@ -10,6 +10,7 @@ export function Layout() {
   const { user, logout } = useAuth()
   const [playlists, setPlaylists] = useState<PlaylistList>({ playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
   const location = useLocation()
+  const selectedPlaylistId = new URLSearchParams(location.search).get('playlist')
 
   useEffect(() => {
     let mounted = true
@@ -28,19 +29,37 @@ export function Layout() {
             <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
           </div>
           <nav className="space-y-1">
-            <NavItem to="/" label="Library" icon={<Library size={18} />} />
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isActive && !selectedPlaylistId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+                }`
+              }
+            >
+              <span className="text-[#1DB954]"><Library size={18} /></span>
+              Library
+            </NavLink>
             {user?.role === 'admin' && (
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
             )}
             <div className="mt-4 text-xs text-[#A1A1A1] px-3">Playlists</div>
             <div className="space-y-1">
               {playlists.playlists.map((p) => (
-                <Link key={p.id} to={`/?playlist=${p.id}`} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#C1C1C1] hover:text-white hover:bg-[#202020]">
+                <Link
+                  key={p.id}
+                  to={`/?playlist=${p.id}`}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedPlaylistId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
+                >
                   <span className="text-[#1DB954]"><Folder size={16} /></span>
                   <span className="truncate">{p.name}</span>
                 </Link>
               ))}
-              <Link to={`/?playlist=unsorted`} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#C1C1C1] hover:text-white hover:bg-[#202020]">
+              <Link
+                to={`/?playlist=unsorted`}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedPlaylistId === 'unsorted' ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
+              >
                 <span className="text-[#1DB954]"><Folder size={16} /></span>
                 Unsorted
               </Link>
