@@ -7,7 +7,7 @@ import { MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
 import { PlaylistList, TrackList } from '../types/playlists'
 
 export function LibraryPage() {
-  const { play, isPlaying, toggle, queue, index } = usePlayer()
+  const { play, isPlaying, toggle, queue, index, setCurrentPlaylist } = usePlayer()
   const current = queue[index]
   const [q, setQ] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -82,6 +82,11 @@ export function LibraryPage() {
       setSelectedPlaylist(next)
     }
   }, [searchParams])
+
+  // Update player context when playlist changes
+  useEffect(() => {
+    setCurrentPlaylist(selectedPlaylist)
+  }, [selectedPlaylist, setCurrentPlaylist])
 
   // Only push to URL if the change originated from in-page actions (not from URL itself)
   const [lastUrlPlaylist, setLastUrlPlaylist] = useState<string | null>(searchParams.get('playlist'))
@@ -311,7 +316,7 @@ export function LibraryPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
-                    className="btn btn-primary p-1 h-7 w-7 flex items-center justify-center"
+                    className="btn btn-primary p-2 flex items-center justify-center"
                     title={isCurrentAndPlaying ? 'Pause' : 'Play'}
                     onClick={() => {
                       if (isCurrent) toggle()
@@ -327,7 +332,7 @@ export function LibraryPage() {
                       }
                     }}
                   >
-                    {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} />}
+                    {isCurrentAndPlaying ? <Pause /> : <Play />}
                   </button>
                   <div className="min-w-0">
                     <div className="truncate">{t.title || t.original_filename}</div>

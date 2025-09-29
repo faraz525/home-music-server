@@ -52,6 +52,20 @@ export function PlayerBar() {
     else audioRef.current.pause()
   }, [isPlaying, current])
 
+  // Handle track changes when index changes (next/prev navigation)
+  useEffect(() => {
+    if (!audioRef.current || !current) return
+    // Load the new track when current changes
+    audioRef.current.load()
+    // Reset progress and duration for new track
+    setProgress(0)
+    setDuration(0)
+    // Auto-play if we were playing before
+    if (isPlaying) {
+      audioRef.current.play().catch(() => {})
+    }
+  }, [current])
+
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
 
   function onSeek(e: React.MouseEvent<HTMLDivElement>) {
@@ -94,13 +108,13 @@ export function PlayerBar() {
   return (
     <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212]">
       <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4">
-        <button className="btn" title="Previous" onClick={prev}>
+        <button className="btn" title="Previous" onClick={() => prev()}>
           <SkipBack />
         </button>
         <button className="btn btn-primary" title={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
           {isPlaying ? <Pause /> : <Play />}
         </button>
-        <button className="btn" title="Next" onClick={next}>
+        <button className="btn" title="Next" onClick={() => next()}>
           <SkipForward />
         </button>
 
