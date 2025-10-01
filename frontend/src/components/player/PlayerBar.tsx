@@ -44,13 +44,10 @@ export function PlayerBar() {
 
   useEffect(() => {
     if (!audioRef.current) return
-    // Reset state on track change
-    audioRef.current.currentTime = 0
-    setProgress(0)
-    setDuration(0)
+    // Handle play/pause state changes
     if (isPlaying) audioRef.current.play().catch(() => {})
     else audioRef.current.pause()
-  }, [isPlaying, current])
+  }, [isPlaying])
 
   // Handle track changes when index changes (next/prev navigation)
   useEffect(() => {
@@ -60,10 +57,7 @@ export function PlayerBar() {
     // Reset progress and duration for new track
     setProgress(0)
     setDuration(0)
-    // Auto-play if we were playing before
-    if (isPlaying) {
-      audioRef.current.play().catch(() => {})
-    }
+    // Auto-play if we were playing before (will be handled by the play/pause effect)
   }, [current])
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
@@ -80,7 +74,9 @@ export function PlayerBar() {
 
   useEffect(() => {
     if (!dragging) return
+
     function handleMove(ev: PointerEvent) {
+      ev.preventDefault()
       if (!audioRef.current || !barRef.current || !duration) return
       const rect = barRef.current.getBoundingClientRect()
       const x = Math.min(Math.max(ev.clientX - rect.left, 0), rect.width)
@@ -89,12 +85,24 @@ export function PlayerBar() {
       audioRef.current.currentTime = nextTime
       setProgress(nextTime)
     }
-    function handleUp() { setDragging(false) }
-    window.addEventListener('pointermove', handleMove)
-    window.addEventListener('pointerup', handleUp)
+
+    function handleUp(ev: PointerEvent) {
+      ev.preventDefault()
+      setDragging(false)
+    }
+
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'grabbing'
+
+    window.addEventListener('pointermove', handleMove, { passive: false })
+    window.addEventListener('pointerup', handleUp, { passive: false })
+
     return () => {
       window.removeEventListener('pointermove', handleMove)
       window.removeEventListener('pointerup', handleUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
     }
   }, [dragging, duration])
 
@@ -128,7 +136,10 @@ export function PlayerBar() {
             ref={barRef}
             className="h-1 rounded-full bg-[#2A2A2A] flex-1 cursor-pointer"
             onClick={onSeek}
-            onPointerDown={() => setDragging(true)}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
           >
             <div className="h-1 rounded-full bg-[#1DB954]" style={{ width: `${pct}%` }} />
           </div>

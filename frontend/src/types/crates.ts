@@ -1,5 +1,5 @@
-// Playlist types for TypeScript
-export type Playlist = {
+// Crate types for TypeScript
+export type Crate = {
   id: string
   owner_user_id: string
   name: string
@@ -9,8 +9,8 @@ export type Playlist = {
   updated_at: string
 }
 
-export type PlaylistWithTracks = {
-  playlist: Playlist
+export type CrateWithTracks = {
+  crate: Crate
   tracks: Track[]
   total: number
   limit: number
@@ -18,8 +18,8 @@ export type PlaylistWithTracks = {
   has_next: boolean
 }
 
-export type PlaylistList = {
-  playlists: Playlist[]
+export type CrateList = {
+  crates: Crate[]
   total: number
   limit: number
   offset: number
@@ -27,25 +27,25 @@ export type PlaylistList = {
 }
 
 // API request/response types
-export type CreatePlaylistRequest = {
+export type CreateCrateRequest = {
   name: string
   description?: string
 }
 
-export type UpdatePlaylistRequest = {
+export type UpdateCrateRequest = {
   name: string
   description?: string
 }
 
-export type AddTracksToPlaylistRequest = {
+export type AddTracksToCrateRequest = {
   track_ids: string[]
 }
 
-export type RemoveTracksFromPlaylistRequest = {
+export type RemoveTracksFromCrateRequest = {
   track_ids: string[]
 }
 
-// Extended Track type with playlist info
+// Extended Track type with crate info
 export type Track = {
   id: string
   title?: string

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { CrateList } from '../types/crates'
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'))
@@ -35,9 +36,24 @@ api.interceptors.response.use(
   }
 )
 
-// Playlist API functions
-export const playlistsApi = {
-  // Playlist CRUD
+export function normalizeCrateList(raw: any): CrateList {
+  const crates = Array.isArray(raw?.crates)
+    ? raw.crates
+    : Array.isArray(raw?.playlists)
+      ? raw.playlists
+      : []
+
+  return {
+    crates,
+    total: typeof raw?.total === 'number' ? raw.total : crates.length,
+    limit: typeof raw?.limit === 'number' ? raw.limit : 20,
+    offset: typeof raw?.offset === 'number' ? raw.offset : 0,
+    has_next: Boolean(raw?.has_next),
+  }
+}
+
+// Crate (playlist) API functions
+export const cratesApi = {
   create: (data: { name: string; description?: string }) =>
     api.post('/api/playlists', data),
 
@@ -53,7 +69,6 @@ export const playlistsApi = {
   delete: (id: string) =>
     api.delete(`/api/playlists/${id}`),
 
-  // Track management
   addTracks: (id: string, trackIds: string[]) =>
     api.post(`/api/playlists/${id}/tracks`, { track_ids: trackIds }),
 
@@ -63,6 +78,9 @@ export const playlistsApi = {
   getTracks: (id: string, params?: { limit?: number; offset?: number }) =>
     api.get(`/api/playlists/${id}/tracks`, { params }),
 }
+
+// Backwards compatibility
+export const playlistsApi = cratesApi
 
 // Unsorted tracks
 export type UnsortedParams = { limit?: number; offset?: number; q?: string }

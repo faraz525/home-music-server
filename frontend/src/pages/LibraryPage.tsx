@@ -1,54 +1,49 @@
-import { api, playlistsApi, tracksApi } from '../lib/api'
+import { api, cratesApi, normalizeCrateList, tracksApi } from '../lib/api'
 import type { UnsortedParams } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { useSearchParams } from 'react-router-dom'
 import { MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
-import { PlaylistList, TrackList } from '../types/playlists'
+import type { CrateList, TrackList } from '../types/crates'
 
 export function LibraryPage() {
-  const { play, isPlaying, toggle, queue, index, setCurrentPlaylist } = usePlayer()
+  const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
   const current = queue[index]
   const [q, setQ] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedPlaylist, setSelectedPlaylist] = useState<string>(() => searchParams.get('playlist') || 'all')
+  const [selectedCrate, setSelectedCrate] = useState<string>(() => searchParams.get('crate') || 'all')
   const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [playlists, setPlaylists] = useState<PlaylistList>({ playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loadingPlaylists, setLoadingPlaylists] = useState(true)
-  const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [showPlaylistDropdown, setShowPlaylistDropdown] = useState(false)
+  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
+  const [loadingCrates, setLoadingCrates] = useState(true)
+  const [showCrateDropdown, setShowCrateDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
 
-  // Fetch playlists
-  const fetchPlaylists = async () => {
+  // Fetch crates
+  const fetchCrates = async () => {
     try {
-      setLoadingPlaylists(true)
-      const { data } = await playlistsApi.list()
-      // Ensure we always have a valid structure
-      setPlaylists(data && data.playlists ? data : { playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
+      setLoadingCrates(true)
+      const { data } = await cratesApi.list()
+      setCrates(normalizeCrateList(data))
     } catch (error) {
-      console.error('Failed to fetch playlists:', error)
-      // Set empty playlists on error
-      setPlaylists({ playlists: [], total: 0, limit: 20, offset: 0, has_next: false })
+      console.error('Failed to fetch crates:', error)
+      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
     } finally {
-      setLoadingPlaylists(false)
+      setLoadingCrates(false)
     }
   }
 
-  // Fetch tracks based on selected playlist
+  // Fetch tracks based on selected crate
   const fetchTracks = useMemo(() => async () => {
     try {
       let data
-      if (selectedPlaylist === 'unsorted') {
+      if (selectedCrate === 'unsorted') {
         const params: UnsortedParams = { q: q || undefined }
         const response = await tracksApi.getUnsorted(params)
         data = response.data
-      } else if (selectedPlaylist && selectedPlaylist !== 'all') {
+      } else if (selectedCrate && selectedCrate !== 'all') {
         const response = await api.get('/api/tracks', {
-          params: { q: q || undefined, playlist_id: selectedPlaylist }
+          params: { q: q || undefined, playlist_id: selectedCrate }
         })
         data = response.data
       } else {
@@ -68,39 +63,39 @@ export function LibraryPage() {
       // On error, set empty tracks to prevent the map error
       setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
     }
-  }, [q, selectedPlaylist])
+  }, [q, selectedCrate])
 
   useEffect(() => {
-    fetchPlaylists()
+    fetchCrates()
   }, [])
 
-  // Keep selected playlist in sync with URL (?playlist=<id>|unsorted or none => all)
+  // Keep selected crate in sync with URL (?crate=<id>|unsorted or none => all)
   useEffect(() => {
-    const p = searchParams.get('playlist')
-    const next = p || 'all'
-    if (next !== selectedPlaylist) {
-      setSelectedPlaylist(next)
+    const c = searchParams.get('crate')
+    const next = c || 'all'
+    if (next !== selectedCrate) {
+      setSelectedCrate(next)
     }
   }, [searchParams])
 
-  // Update player context when playlist changes
+  // Update player context when crate changes
   useEffect(() => {
-    setCurrentPlaylist(selectedPlaylist)
-  }, [selectedPlaylist, setCurrentPlaylist])
+    setCurrentCrate(selectedCrate)
+  }, [selectedCrate, setCurrentCrate])
 
   // Only push to URL if the change originated from in-page actions (not from URL itself)
-  const [lastUrlPlaylist, setLastUrlPlaylist] = useState<string | null>(searchParams.get('playlist'))
+  const [lastUrlCrate, setLastUrlCrate] = useState<string | null>(searchParams.get('crate'))
   useEffect(() => {
-    const curr = searchParams.get('playlist') || 'all'
-    // If selectedPlaylist differs from the URL and the URL hasn't just changed, update URL
-    if (selectedPlaylist !== curr && lastUrlPlaylist === curr) {
+    const curr = searchParams.get('crate') || 'all'
+    // If selectedCrate differs from the URL and the URL hasn't just changed, update URL
+    if (selectedCrate !== curr && lastUrlCrate === curr) {
       const next = new URLSearchParams(searchParams)
-      if (selectedPlaylist && selectedPlaylist !== 'all') next.set('playlist', selectedPlaylist)
-      else next.delete('playlist')
+      if (selectedCrate && selectedCrate !== 'all') next.set('crate', selectedCrate)
+      else next.delete('crate')
       setSearchParams(next, { replace: true })
     }
-    setLastUrlPlaylist(searchParams.get('playlist'))
-  }, [selectedPlaylist, searchParams])
+    setLastUrlCrate(searchParams.get('crate'))
+  }, [selectedCrate, searchParams])
 
   useEffect(() => {
     fetchTracks()
@@ -109,8 +104,8 @@ export function LibraryPage() {
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showPlaylistDropdown && !(event.target as Element).closest('.playlist-dropdown')) {
-        setShowPlaylistDropdown(false)
+      if (showCrateDropdown && !(event.target as Element).closest('.crate-dropdown')) {
+        setShowCrateDropdown(false)
       }
       if (trackMenuOpen && !(event.target as Element).closest('.track-menu')) {
         setTrackMenuOpen(null)
@@ -119,84 +114,57 @@ export function LibraryPage() {
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showPlaylistDropdown, trackMenuOpen])
+  }, [showCrateDropdown, trackMenuOpen])
 
-  async function onUpload(e: FormEvent) {
-    e.preventDefault()
-    if (!file) return
-    const form = new FormData()
-    form.append('file', file)
-
-    // Add playlist assignment if a playlist is selected (not 'all' or 'unsorted')
-    if (selectedPlaylist && selectedPlaylist !== 'all' && selectedPlaylist !== 'unsorted') {
-      form.append('playlist_id', selectedPlaylist)
-    }
-
-    setUploading(true)
-    setProgress(0)
-    try {
-      await api.post('/api/tracks', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (ev) => {
-          if (ev.total) setProgress(Math.round((ev.loaded * 100) / ev.total))
-        },
-      })
-      setFile(null)
-      await fetchTracks()
-      await fetchPlaylists() // Refresh playlists in case new tracks were added
-    } finally {
-      setUploading(false)
-    }
-  }
 
   async function onDelete(id: string) {
     await api.delete(`/api/tracks/${id}`)
     await fetchTracks()
   }
 
-  async function addTrackToPlaylist(trackId: string, playlistId: string) {
+  async function addTrackToCrate(trackId: string, crateId: string) {
     try {
-      await playlistsApi.addTracks(playlistId, [trackId])
+      await cratesApi.addTracks(crateId, [trackId])
       await fetchTracks()
-      await fetchPlaylists()
+      await fetchCrates()
     } catch (error) {
-      console.error('Failed to add track to playlist:', error)
+      console.error('Failed to add track to crate:', error)
     }
   }
 
-  async function removeTrackFromPlaylist(trackId: string, playlistId: string) {
+  async function removeTrackFromCrate(trackId: string, crateId: string) {
     try {
-      await playlistsApi.removeTracks(playlistId, [trackId])
+      await cratesApi.removeTracks(crateId, [trackId])
       await fetchTracks()
-      await fetchPlaylists()
+      await fetchCrates()
     } catch (error) {
-      console.error('Failed to remove track from playlist:', error)
+      console.error('Failed to remove track from crate:', error)
     }
   }
 
   // Bulk actions
-  async function bulkAddToPlaylist(playlistId: string) {
+  async function bulkAddToCrate(crateId: string) {
     try {
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await playlistsApi.addTracks(playlistId, ids)
+      await cratesApi.addTracks(crateId, ids)
       setSelectedTrackIds(new Set())
       await fetchTracks()
-      await fetchPlaylists()
+      await fetchCrates()
     } catch (error) {
       console.error('Failed bulk add:', error)
     }
   }
 
-  async function bulkRemoveFromCurrentPlaylist() {
+  async function bulkRemoveFromCurrentCrate() {
     try {
-      if (!selectedPlaylist || selectedPlaylist === 'all' || selectedPlaylist === 'unsorted') return
+      if (!selectedCrate || selectedCrate === 'all' || selectedCrate === 'unsorted') return
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await playlistsApi.removeTracks(selectedPlaylist, ids)
+      await cratesApi.removeTracks(selectedCrate, ids)
       setSelectedTrackIds(new Set())
       await fetchTracks()
-      await fetchPlaylists()
+      await fetchCrates()
     } catch (error) {
       console.error('Failed bulk remove:', error)
     }
@@ -220,7 +188,7 @@ export function LibraryPage() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  // selected playlist is controlled by the URL and sidebar links
+  // selected crate is controlled by the URL and sidebar links
 
   return (
     <div className="space-y-6">
@@ -229,29 +197,29 @@ export function LibraryPage() {
         <div className="card p-3 flex flex-wrap items-center gap-3">
           <div className="text-sm">{selectedTrackIds.size} selected</div>
           <div className="relative">
-            <button className="btn btn-primary" onClick={() => setShowPlaylistDropdown(!showPlaylistDropdown)}>
-              Add to playlist
+            <button className="btn btn-primary" onClick={() => setShowCrateDropdown(!showCrateDropdown)}>
+              Add to crate
             </button>
-            {showPlaylistDropdown && (
-              <div className="playlist-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-10">
-                {loadingPlaylists ? (
-                  <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading playlists...</div>
+            {showCrateDropdown && (
+              <div className="crate-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
+                {loadingCrates ? (
+                  <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
                 ) : (
-                  playlists.playlists?.filter(p => !p.is_default).map((p) => (
+                  crates.crates?.filter(c => !c.is_default).map((c) => (
                     <button
-                      key={p.id}
+                      key={c.id}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A]"
-                      onClick={() => { bulkAddToPlaylist(p.id); setShowPlaylistDropdown(false) }}
+                      onClick={() => { bulkAddToCrate(c.id); setShowCrateDropdown(false) }}
                     >
-                      {p.name}
+                      {c.name}
                     </button>
                   ))
                 )}
               </div>
             )}
           </div>
-          {selectedPlaylist && selectedPlaylist !== 'all' && selectedPlaylist !== 'unsorted' && (
-            <button className="btn" onClick={bulkRemoveFromCurrentPlaylist}>Remove from this playlist</button>
+          {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
+            <button className="btn" onClick={bulkRemoveFromCurrentCrate}>Remove from this crate</button>
           )}
           <button className="btn" onClick={clearSelection}>Clear selection</button>
         </div>
@@ -270,19 +238,6 @@ export function LibraryPage() {
         </div>
       </div>
 
-      <div className="card p-4">
-        <form className="flex items-center gap-3" onSubmit={onUpload}>
-          <input
-            type="file"
-            className="input file:mr-4 file:rounded-full file:border-0 file:bg-[#1DB954] file:text-black file:px-3 file:py-1"
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] || null)}
-            accept="audio/*"
-          />
-          <button className="btn btn-primary" disabled={!file || uploading}>
-            {uploading ? `Uploading ${progress}%` : 'Upload'}
-          </button>
-        </form>
-      </div>
 
       <div className="card p-0 overflow-hidden">
         {/* Header row */}
@@ -351,39 +306,39 @@ export function LibraryPage() {
                   <MoreHorizontal size={16} />
                 </button>
                 {trackMenuOpen === t.id && (
-                  <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-20">
-                    <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">Add to Playlist</div>
-                    {loadingPlaylists ? (
-                      <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading playlists...</div>
+                  <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-40">
+                    <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">Add to Crate</div>
+                    {loadingCrates ? (
+                      <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
                     ) : (
-                      playlists.playlists && playlists.playlists
-                        .filter(p => !p.is_default)
-                        .map((playlist) => (
+                      crates.crates && crates.crates
+                        .filter(c => !c.is_default)
+                        .map((crate) => (
                           <button
-                            key={playlist.id}
+                            key={crate.id}
                             onClick={() => {
-                              addTrackToPlaylist(t.id, playlist.id)
+                              addTrackToCrate(t.id, crate.id)
                               setTrackMenuOpen(null)
                             }}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
                           >
                             <ListPlus size={14} />
-                            {playlist.name}
+                            {crate.name}
                           </button>
                         ))
                     )}
-                    {selectedPlaylist && selectedPlaylist !== 'all' && selectedPlaylist !== 'unsorted' && (
+                    {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
                       <>
                         <div className="border-t border-[#2A2A2A] my-1"></div>
                         <button
                           onClick={() => {
-                            removeTrackFromPlaylist(t.id, selectedPlaylist)
+                            removeTrackFromCrate(t.id, selectedCrate)
                             setTrackMenuOpen(null)
                           }}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] text-red-400 flex items-center gap-2"
                         >
                           <ListPlus size={14} className="rotate-45" />
-                          Remove from Playlist
+                          Remove from Crate
                         </button>
                       </>
                     )}

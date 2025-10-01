@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
-import { api, playlistsApi, tracksApi } from '../lib/api'
+import { api, cratesApi, tracksApi } from '../lib/api'
 
 export type QueueItem = {
   id: string
@@ -11,11 +11,11 @@ export type QueueItem = {
 type PlayerContextValue = {
   queue: QueueItem[]
   index: number
-  currentPlaylist: string | null
+  currentCrate: string | null
   play: (item: QueueItem, replace?: boolean) => void
   next: () => void
   prev: () => void
-  setCurrentPlaylist: (playlistId: string | null) => void
+  setCurrentCrate: (crateId: string | null) => void
   isPlaying: boolean
   toggle: () => void
 }
@@ -26,17 +26,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [index, setIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [currentPlaylist, setCurrentPlaylist] = useState<string | null>(null)
+  const [currentCrate, setCurrentCrate] = useState<string | null>(null)
 
-  async function fetchPlaylistTracks(playlistId: string) {
+  async function fetchCrateTracks(crateId: string) {
     try {
       let response
-      if (playlistId === 'unsorted') {
+      if (crateId === 'unsorted') {
         response = await tracksApi.getUnsorted({ limit: 100 })
-      } else if (playlistId === 'all') {
+      } else if (crateId === 'all') {
         response = await api.get('/api/tracks', { params: { limit: 100 } })
       } else {
-        response = await playlistsApi.getTracks(playlistId, { limit: 100 })
+        response = await cratesApi.getTracks(crateId, { limit: 100 })
       }
 
       const tracks = response.data?.tracks || []
@@ -52,10 +52,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function populateQueueFromPlaylist() {
-    if (!currentPlaylist) return false
+  async function populateQueueFromCrate() {
+    if (!currentCrate) return false
 
-    const tracks = await fetchPlaylistTracks(currentPlaylist)
+    const tracks = await fetchCrateTracks(currentCrate)
     if (tracks.length > 0) {
       setQueue(tracks)
       setIndex(0)
@@ -80,8 +80,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (canAdvance) {
       setIndex((i) => i + 1)
     } else if (queue.length <= 1) {
-      // Queue is empty or has only one track, try to populate from playlist
-      const populated = await populateQueueFromPlaylist()
+      // Queue is empty or has only one track, try to populate from crate
+      const populated = await populateQueueFromCrate()
       if (populated && queue.length > 1) {
         setIndex(1) // Move to the second track since we're advancing
       }
@@ -92,8 +92,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (index > 0) {
       setIndex((i) => i - 1)
     } else if (queue.length <= 1) {
-      // At the beginning and queue is small, try to populate from playlist
-      await populateQueueFromPlaylist()
+      // At the beginning and queue is small, try to populate from crate
+      await populateQueueFromCrate()
       // Stay at index 0 since we're going backwards
     }
   }
@@ -103,14 +103,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(() => ({
     queue,
     index,
-    currentPlaylist,
+    currentCrate,
     play,
     next,
     prev,
-    setCurrentPlaylist,
+    setCurrentCrate,
     isPlaying,
     toggle
-  }), [queue, index, currentPlaylist, isPlaying])
+  }), [queue, index, currentCrate, isPlaying])
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }
