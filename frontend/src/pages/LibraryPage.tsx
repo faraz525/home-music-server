@@ -2,8 +2,8 @@ import { api, cratesApi, normalizeCrateList, tracksApi } from '../lib/api'
 import type { UnsortedParams } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
-import { useSearchParams } from 'react-router-dom'
-import { MoreHorizontal, ListPlus, Play, Pause } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { MoreHorizontal, ListPlus, Play, Pause, Music } from 'lucide-react'
 import type { CrateList, TrackList } from '../types/crates'
 
 export function LibraryPage() {
@@ -15,6 +15,7 @@ export function LibraryPage() {
   const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [loadingCrates, setLoadingCrates] = useState(true)
+  const [loadingTracks, setLoadingTracks] = useState(true)
   const [showCrateDropdown, setShowCrateDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
@@ -36,6 +37,7 @@ export function LibraryPage() {
   // Fetch tracks based on selected crate
   const fetchTracks = useMemo(() => async () => {
     try {
+      setLoadingTracks(true)
       let data
       if (selectedCrate === 'unsorted') {
         const params: UnsortedParams = { q: q || undefined }
@@ -62,6 +64,8 @@ export function LibraryPage() {
       console.error('Failed to fetch tracks:', error)
       // On error, set empty tracks to prevent the map error
       setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
+    } finally {
+      setLoadingTracks(false)
     }
   }, [q, selectedCrate])
 
@@ -191,7 +195,12 @@ export function LibraryPage() {
   // selected crate is controlled by the URL and sidebar links
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-visible">
+      <div>
+        <h1 className="text-2xl font-bold">Your Library</h1>
+        <p className="text-[#A1A1A1] mt-1">All your music in one place</p>
+      </div>
+
       {/* Bulk selection toolbar */}
       {selectedTrackIds.size > 0 && (
         <div className="card p-3 flex flex-wrap items-center gap-3">
@@ -239,9 +248,9 @@ export function LibraryPage() {
       </div>
 
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0">
         {/* Header row */}
-        <div className="px-4 py-2 text-xs uppercase tracking-wide text-[#A1A1A1] grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 border-b border-[#2A2A2A]">
+        <div className="px-4 py-2 text-xs uppercase tracking-wide text-[#A1A1A1] grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 border-b border-[#2A2A2A] min-w-[800px]">
           <input
             type="checkbox"
             checked={tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
@@ -257,12 +266,35 @@ export function LibraryPage() {
           <div></div>
         </div>
 
+        {/* Loading state */}
+        {loadingTracks && (
+          <div className="px-4 py-8 text-center text-[#A1A1A1]">
+            Loading tracks...
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loadingTracks && tracks.tracks.length === 0 && (
+          <div className="px-4 py-8 text-center">
+            <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
+            <div className="text-lg font-semibold mb-2">No tracks found</div>
+            <div className="text-[#A1A1A1] mb-4">
+              {q ? 'Try adjusting your search query' : 'Upload some music to get started'}
+            </div>
+            {!q && (
+              <Link to="/upload" className="btn btn-primary inline-flex">
+                Upload Music
+              </Link>
+            )}
+          </div>
+        )}
+
         {/* Rows */}
-        {Array.isArray(tracks.tracks) && tracks.tracks.map((t, idx) => {
+        {!loadingTracks && Array.isArray(tracks.tracks) && tracks.tracks.map((t, idx) => {
           const isCurrent = current?.id === t.id
           const isCurrentAndPlaying = isCurrent && isPlaying
           return (
-            <div key={t.id} className="px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A]">
+            <div key={t.id} className="px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px]">
               <input
                 type="checkbox"
                 checked={selectedTrackIds.has(t.id)}
@@ -306,7 +338,7 @@ export function LibraryPage() {
                   <MoreHorizontal size={16} />
                 </button>
                 {trackMenuOpen === t.id && (
-                  <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-40">
+                  <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
                     <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">Add to Crate</div>
                     {loadingCrates ? (
                       <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>

@@ -3,6 +3,7 @@ package playlists
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	idb "github.com/faraz525/home-music-server/backend/internal/db"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
@@ -321,7 +322,7 @@ func (r *Repository) RemoveTracksFromPlaylist(playlistID string, trackIDs []stri
 	query := fmt.Sprintf(`
 		DELETE FROM playlist_tracks
 		WHERE playlist_id = ? AND track_id IN (%s)
-	`, fmt.Sprintf("%s", placeholders[0], placeholders[1:]))
+	`, strings.Join(placeholders, ", "))
 
 	result, err := r.db.Exec(query, args...)
 	if err != nil {

@@ -43,13 +43,8 @@ export function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        <div className="mt-4 space-y-3">
-          <div className="text-sm text-[#A1A1A1] text-center">
-            Don't have an account?
-          </div>
-          <Link to="/signup" className="btn btn-primary w-full block text-center">
-            Sign up
-          </Link>
+        <div className="mt-4 text-sm text-[#A1A1A1] text-center">
+          Don't have an account? <Link className="link" to="/signup">Sign up</Link>
         </div>
       </div>
     </div>

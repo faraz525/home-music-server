@@ -16,6 +16,10 @@ export function PlayerBar() {
     const el = audioRef.current
     const onTime = () => setProgress(el.currentTime)
     const onLoaded = () => setDuration(isFinite(el.duration) ? el.duration : 0)
+    const onEnded = () => {
+      // Auto-play next track when current track ends
+      next()
+    }
     const onError = async () => {
       try {
         await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
@@ -34,13 +38,15 @@ export function PlayerBar() {
     }
     el.addEventListener('timeupdate', onTime)
     el.addEventListener('loadedmetadata', onLoaded)
+    el.addEventListener('ended', onEnded)
     el.addEventListener('error', onError)
     return () => {
       el.removeEventListener('timeupdate', onTime)
       el.removeEventListener('loadedmetadata', onLoaded)
+      el.removeEventListener('ended', onEnded)
       el.removeEventListener('error', onError)
     }
-  }, [])
+  }, [next])
 
   useEffect(() => {
     if (!audioRef.current) return
@@ -52,13 +58,23 @@ export function PlayerBar() {
   // Handle track changes when index changes (next/prev navigation)
   useEffect(() => {
     if (!audioRef.current || !current) return
+    const el = audioRef.current
+    
     // Load the new track when current changes
-    audioRef.current.load()
+    el.load()
     // Reset progress and duration for new track
     setProgress(0)
     setDuration(0)
-    // Auto-play if we were playing before (will be handled by the play/pause effect)
-  }, [current])
+    
+    // Auto-play if we were playing before - wait for metadata to load
+    if (isPlaying) {
+      const onCanPlay = () => {
+        el.play().catch(() => {})
+        el.removeEventListener('canplay', onCanPlay)
+      }
+      el.addEventListener('canplay', onCanPlay)
+    }
+  }, [current, isPlaying])
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
 
@@ -114,8 +130,8 @@ export function PlayerBar() {
   }
 
   return (
-    <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212]">
-      <div className="mx-auto max-w-6xl px-6 py-3 flex items-center gap-4">
+    <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212] z-30">
+      <div className="mx-auto max-w-6xl px-3 sm:px-6 py-2 sm:py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
         <button className="btn" title="Previous" onClick={() => prev()}>
           <SkipBack />
         </button>
@@ -126,12 +142,20 @@ export function PlayerBar() {
           <SkipForward />
         </button>
 
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          <div className="min-w-0">
+        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 flex-1 min-w-0 w-full sm:w-auto">
+          {/* Mobile: Show track info above controls */}
+          <div className="sm:hidden w-full text-center mb-1">
+            <div className="truncate text-xs">{current?.title || 'Unknown track'}</div>
+            <div className="truncate text-xs text-[#A1A1A1]">{current?.artist || 'Unknown artist'}</div>
+          </div>
+          
+          {/* Desktop: Show track info inline */}
+          <div className="min-w-0 hidden sm:block">
             <div className="truncate text-sm">{current?.title || 'Unknown track'}</div>
             <div className="truncate text-xs text-[#A1A1A1]">{current?.artist || 'Unknown artist'}</div>
           </div>
-          <div className="text-xs tabular-nums text-[#A1A1A1] w-12 text-right">{formatTime(progress)}</div>
+          
+          <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12 text-right">{formatTime(progress)}</div>
           <div
             ref={barRef}
             className="h-1 rounded-full bg-[#2A2A2A] flex-1 cursor-pointer"
@@ -143,7 +167,7 @@ export function PlayerBar() {
           >
             <div className="h-1 rounded-full bg-[#1DB954]" style={{ width: `${pct}%` }} />
           </div>
-          <div className="text-xs tabular-nums text-[#A1A1A1] w-12">{formatTime(duration)}</div>
+          <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12">{formatTime(duration)}</div>
         </div>
 
         <audio ref={audioRef} src={current?.streamUrl} preload="metadata" crossOrigin="use-credentials" />

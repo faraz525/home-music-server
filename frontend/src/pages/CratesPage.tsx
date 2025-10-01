@@ -12,6 +12,7 @@ export function CratesPage() {
   const [createForm, setCreateForm] = useState<CreateCrateRequest>({ name: '', description: '' })
   const [updateForm, setUpdateForm] = useState<UpdateCrateRequest>({ name: '', description: '' })
   const [searchParams, setSearchParams] = useSearchParams()
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
   useEffect(() => {
     fetchCrates()
@@ -20,6 +21,17 @@ export function CratesPage() {
   useEffect(() => {
     if (searchParams.get('create') === '1') setShowCreateModal(true)
   }, [searchParams])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuOpen && !(event.target as Element).closest('.crate-menu')) {
+        setMenuOpen(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
 
   const fetchCrates = async () => {
     try {
@@ -138,29 +150,38 @@ export function CratesPage() {
               </div>
 
               {!crate.is_default && (
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="relative">
-                    <button className="p-1 hover:bg-[#2A2A2A] rounded">
-                      <MoreHorizontal size={16} />
-                    </button>
+                <div className="relative">
+                  <button 
+                    className="p-1 hover:bg-[#2A2A2A] rounded"
+                    onClick={() => setMenuOpen(menuOpen === crate.id ? null : crate.id)}
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
 
-                    <div className="absolute right-0 mt-1 w-32 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-30">
+                  {menuOpen === crate.id && (
+                    <div className="crate-menu absolute right-0 mt-1 w-32 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
                       <button
-                        onClick={() => startEdit(crate)}
+                        onClick={() => {
+                          startEdit(crate)
+                          setMenuOpen(null)
+                        }}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
                       >
                         <Edit size={14} />
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(crate)}
+                        onClick={() => {
+                          handleDelete(crate)
+                          setMenuOpen(null)
+                        }}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2 text-red-400"
                       >
                         <Trash2 size={14} />
                         Delete
                       </button>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
