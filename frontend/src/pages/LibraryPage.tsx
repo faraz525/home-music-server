@@ -19,6 +19,8 @@ export function LibraryPage() {
   const [showCrateDropdown, setShowCrateDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
+  const [draggingTrackIds, setDraggingTrackIds] = useState<Set<string>>(new Set())
 
   // Fetch crates
   const fetchCrates = async () => {
@@ -105,6 +107,15 @@ export function LibraryPage() {
     fetchTracks()
   }, [fetchTracks])
 
+  // Listen for track updates from drag and drop
+  useEffect(() => {
+    const handleTracksUpdated = () => {
+      fetchTracks()
+    }
+    window.addEventListener('tracks:updated', handleTracksUpdated)
+    return () => window.removeEventListener('tracks:updated', handleTracksUpdated)
+  }, [fetchTracks])
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -174,22 +185,61 @@ export function LibraryPage() {
     }
   }
 
-  function toggleSelected(id: string) {
-    setSelectedTrackIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  function toggleSelected(id: string, shiftKey: boolean = false, index: number) {
+    if (shiftKey && lastClickedIndex !== null) {
+      // Shift-click: select range
+      const start = Math.min(lastClickedIndex, index)
+      const end = Math.max(lastClickedIndex, index)
+      const rangeIds = tracks.tracks.slice(start, end + 1).map(t => t.id)
+      setSelectedTrackIds((prev) => {
+        const next = new Set(prev)
+        rangeIds.forEach(id => next.add(id))
+        return next
+      })
+    } else {
+      // Regular click: toggle single
+      setSelectedTrackIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    }
+    setLastClickedIndex(index)
   }
 
-  function clearSelection() { setSelectedTrackIds(new Set()) }
+  function clearSelection() { 
+    setSelectedTrackIds(new Set())
+    setLastClickedIndex(null)
+  }
 
   function formatDuration(totalSeconds?: number) {
     if (!totalSeconds || totalSeconds <= 0) return '—'
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = Math.floor(totalSeconds % 60)
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  // Drag handlers
+  function handleDragStart(e: React.DragEvent, trackId: string) {
+    // Prevent drag if clicking on interactive elements
+    const target = e.target as HTMLElement
+    if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button')) {
+      e.preventDefault()
+      return
+    }
+
+    const tracksToDrag = selectedTrackIds.has(trackId) 
+      ? Array.from(selectedTrackIds) 
+      : [trackId]
+    
+    setDraggingTrackIds(new Set(tracksToDrag))
+    e.dataTransfer.effectAllowed = 'copy'
+    e.dataTransfer.setData('application/json', JSON.stringify({ trackIds: tracksToDrag }))
+  }
+
+  function handleDragEnd() {
+    setDraggingTrackIds(new Set())
   }
 
   // selected crate is controlled by the URL and sidebar links
@@ -293,12 +343,24 @@ export function LibraryPage() {
         {!loadingTracks && Array.isArray(tracks.tracks) && tracks.tracks.map((t, idx) => {
           const isCurrent = current?.id === t.id
           const isCurrentAndPlaying = isCurrent && isPlaying
+          const isSelected = selectedTrackIds.has(t.id)
+          const isDragging = draggingTrackIds.has(t.id)
           return (
-            <div key={t.id} className="px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px]">
+            <div 
+              key={t.id} 
+              className={`px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px] cursor-move transition-opacity ${isSelected ? 'bg-[#2A2A2A]' : ''} ${isDragging ? 'opacity-50' : ''}`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, t.id)}
+              onDragEnd={handleDragEnd}
+            >
               <input
                 type="checkbox"
-                checked={selectedTrackIds.has(t.id)}
-                onChange={() => toggleSelected(t.id)}
+                checked={isSelected}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleSelected(t.id, e.shiftKey, idx)
+                }}
+                onChange={() => {}} // Controlled input
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-3 min-w-0">

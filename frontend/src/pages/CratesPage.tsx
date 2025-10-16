@@ -13,6 +13,7 @@ export function CratesPage() {
   const [updateForm, setUpdateForm] = useState<UpdateCrateRequest>({ name: '', description: '' })
   const [searchParams, setSearchParams] = useSearchParams()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchCrates()
@@ -104,6 +105,40 @@ export function CratesPage() {
     })
   }
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent, crateId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOverCrateId(crateId)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverCrateId(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, crateId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverCrateId(null)
+
+    try {
+      const data = e.dataTransfer.getData('application/json')
+      if (data) {
+        const { trackIds } = JSON.parse(data)
+        if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
+          await cratesApi.addTracks(crateId, trackIds)
+          window.dispatchEvent(new CustomEvent('crates:updated'))
+          await fetchCrates()
+        }
+      }
+    } catch (error) {
+      console.error('Failed to add tracks to crate:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -130,7 +165,13 @@ export function CratesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.isArray(crates.crates) && crates.crates.map((crate) => (
-          <div key={crate.id} className="card p-4 group">
+          <div 
+            key={crate.id} 
+            className={`card p-4 group transition-all ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+            onDragOver={(e) => handleDragOver(e, crate.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, crate.id)}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3 flex-1">
                 <div className="w-12 h-12 bg-[#1DB954] rounded-lg flex items-center justify-center">

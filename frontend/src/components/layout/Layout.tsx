@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, Plus } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useEffect, useState } from 'react'
@@ -10,6 +10,7 @@ export function Layout() {
   const { user, logout } = useAuth()
   const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
   const location = useLocation()
   const search = new URLSearchParams(location.search)
   const selectedCrateId = search.get('crate') || search.get('playlist')
@@ -43,6 +44,41 @@ export function Layout() {
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location])
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent, crateId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOverCrateId(crateId)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverCrateId(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, crateId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverCrateId(null)
+
+    try {
+      const data = e.dataTransfer.getData('application/json')
+      if (data) {
+        const { trackIds } = JSON.parse(data)
+        if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
+          await cratesApi.addTracks(crateId, trackIds)
+          // Trigger refresh events
+          window.dispatchEvent(new CustomEvent('crates:updated'))
+          window.dispatchEvent(new CustomEvent('tracks:updated'))
+        }
+      }
+    } catch (error) {
+      console.error('Failed to add tracks to crate:', error)
+    }
+  }
 
   return (
     <div className="min-h-screen grid grid-rows-[1fr_auto] overflow-visible">
@@ -83,27 +119,30 @@ export function Layout() {
           {user?.role === 'admin' && (
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
           )}
-          <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
-          <div className="space-y-1">
-            {crates.crates.map((p) => (
+            <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
+            <div className="space-y-1">
+              {crates.crates.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/?crate=${p.id}`}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, p.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, p.id)}
+                >
+                  <span className="text-[#1DB954]"><Folder size={16} /></span>
+                  <span className="truncate">{p.name}</span>
+                </Link>
+              ))}
               <Link
-                key={p.id}
-                to={`/?crate=${p.id}`}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
+                to="/?crate=unsorted"
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === 'unsorted' ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
               >
-                <span className="text-[#1DB954]"><Folder size={16} /></span>
-                <span className="truncate">{p.name}</span>
-              </Link>
-            ))}
-            <Link
-              to="/?crate=unsorted"
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === 'unsorted' ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
-            >
               <span className="text-[#1DB954]"><Folder size={16} /></span>
               Unsorted
             </Link>
             <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><Folder size={16} /></span>
+              <span className="text-[#1DB954]"><Plus size={16} /></span>
               Manage Crates
             </Link>
           </div>
@@ -146,7 +185,10 @@ export function Layout() {
                 <Link
                   key={p.id}
                   to={`/?crate=${p.id}`}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, p.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, p.id)}
                 >
                   <span className="text-[#1DB954]"><Folder size={16} /></span>
                   <span className="truncate">{p.name}</span>
@@ -160,11 +202,11 @@ export function Layout() {
                 Unsorted
               </Link>
               <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-                <span className="text-[#1DB954]"><Folder size={16} /></span>
-                Manage Crates
-              </Link>
-            </div>
-          </nav>
+              <span className="text-[#1DB954]"><Plus size={16} /></span>
+              Manage Crates
+            </Link>
+          </div>
+        </nav>
           <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
           <div className="flex items-center justify-between mt-1">
             <div className="text-sm">{user?.email}</div>

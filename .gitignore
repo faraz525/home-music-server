@@ -73,3 +73,22 @@ public
 # Temporary folders
 tmp/
 temp/
+
+# SQLite database files
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Music files and user data
+**/track_track_*/
+**/user_user_*/
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+*.ogg
+*.wma
+data/
+backend/data/
