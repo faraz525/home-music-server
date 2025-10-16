@@ -9,7 +9,7 @@ import (
 func Routes(m *Manager, pm *playlists.Manager) func(*gin.RouterGroup) {
 	return func(r *gin.RouterGroup) {
 		g := r.Group("/tracks")
-		g.POST("", UploadHandler(m))
+		g.POST("", UploadHandler(m, pm))
 		g.GET("", ListHandler(m, pm))
 		g.GET("/:id", GetHandler(m))
 		g.GET("/:id/stream", StreamHandler(m))

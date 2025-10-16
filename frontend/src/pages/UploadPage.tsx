@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
-import { api, cratesApi, CrateList } from '../lib/api'
+import { api, cratesApi, CrateList, normalizeCrateList } from '../lib/api'
 import type { Crate } from '../types/crates'
 import { Upload, Music, X } from 'lucide-react'
 
@@ -17,7 +17,7 @@ export function UploadPage() {
     try {
       setLoadingCrates(true)
       const { data } = await cratesApi.list()
-      setCrates(data)
+      setCrates(normalizeCrateList(data))
     } catch (error) {
       console.error('Failed to fetch crates:', error)
       setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
@@ -193,7 +193,7 @@ export function UploadPage() {
               {loadingCrates ? (
                 <option disabled>Loading crates...</option>
               ) : (
-                crates.crates?.filter(c => !c.is_default).map((crate) => (
+                (crates.crates || []).filter((c: { id: string }) => c.id !== 'unsorted').map((crate) => (
                   <option key={crate.id} value={crate.id}>
                     {crate.name}
                   </option>

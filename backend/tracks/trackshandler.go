@@ -19,7 +19,7 @@ type UploadRequest struct {
 	Album  string `form:"album"`
 }
 
-func UploadHandler(manager *Manager) gin.HandlerFunc {
+func UploadHandler(manager *Manager, playlistsManager *playlists.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get user ID from context
 		userID, exists := c.Get("user_id")
@@ -41,6 +41,12 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 
 		fmt.Printf("[CrateDrop] File received: %s (%d bytes)\n", header.Filename, header.Size)
 
+		// Get playlist_id from form (optional)
+		playlistID := c.PostForm("playlist_id")
+		if playlistID != "" {
+			fmt.Printf("[CrateDrop] Playlist ID specified: %s\n", playlistID)
+		}
+
 		// Parse form data
 		var req imodels.UploadTrackRequest
 		if err := c.ShouldBind(&req); err != nil {
@@ -58,7 +64,22 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		fmt.Printf("[CrateDrop] Upload successful, returning track: %s\n", track.ID)
+		fmt.Printf("[CrateDrop] Upload successful, track ID: %s\n", track.ID)
+
+		// Add track to playlist if specified
+		if playlistID != "" && playlistID != "unsorted" {
+			fmt.Printf("[CrateDrop] Adding track to playlist: %s\n", playlistID)
+			addReq := &imodels.AddTracksToPlaylistRequest{
+				TrackIDs: []string{track.ID},
+			}
+			if err := playlistsManager.AddTracksToPlaylist(playlistID, userID.(string), addReq); err != nil {
+				fmt.Printf("[CrateDrop] Warning: failed to add track to playlist: %v\n", err)
+				// Don't fail the upload, just log the warning
+			} else {
+				fmt.Printf("[CrateDrop] Track successfully added to playlist\n")
+			}
+		}
+
 		c.JSON(http.StatusCreated, gin.H{"track": track})
 	}
 }
@@ -66,7 +87,6 @@ func UploadHandler(manager *Manager) gin.HandlerFunc {
 func ListHandler(manager *Manager, playlistsManager *playlists.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
-		userRole, _ := c.Get("user_role")
 
 		// Parse query parameters
 		q := c.Query("q")
@@ -86,8 +106,23 @@ func ListHandler(manager *Manager, playlistsManager *playlists.Manager) gin.Hand
 
 		var trackList *imodels.TrackList
 
-		// Handle playlist-based queries
-		if playlistID != "" {
+		// Handle search queries (prioritize search if present)
+		if q != "" {
+			// If searching with a specific playlist/crate, filter results
+			if playlistID != "" {
+				if playlistID == "unsorted" {
+					// Search within unsorted tracks only
+					trackList, err = playlistsManager.SearchUnsortedTracks(userID.(string), q, limit, offset)
+				} else {
+					// Search within specific playlist
+					trackList, err = playlistsManager.SearchPlaylistTracks(playlistID, userID.(string), q, limit, offset)
+				}
+			} else {
+				// Search all user's tracks
+				trackList, err = manager.SearchTracks(c.Request.Context(), q, userID.(string), limit, offset)
+			}
+		} else if playlistID != "" {
+			// No search, just list tracks from playlist/crate
 			if playlistID == "unsorted" {
 				// Get tracks not in any playlist
 				trackList, err = playlistsManager.GetUnsortedTracks(userID.(string), limit, offset)
@@ -107,17 +142,8 @@ func ListHandler(manager *Manager, playlistsManager *playlists.Manager) gin.Hand
 					}
 				}
 			}
-		} else if userRole == "admin" && q != "" {
-			// Admin can search all tracks
-			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, q)
-		} else if userRole == "admin" {
-			// Admin can see all tracks
-			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, "")
-		} else if q != "" {
-			// Regular users can search their tracks
-			trackList, err = manager.SearchTracks(c.Request.Context(), q, userID.(string), limit, offset)
 		} else {
-			// Regular users see only their tracks
+			// No search, no playlist - show all user's tracks
 			trackList, err = manager.GetTracks(c.Request.Context(), userID.(string), limit, offset)
 		}
 

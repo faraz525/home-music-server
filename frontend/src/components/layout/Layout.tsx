@@ -125,27 +125,20 @@ export function Layout() {
                 <Link
                   key={p.id}
                   to={`/?crate=${p.id}`}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
-                  onDragOver={(e) => handleDragOver(e, p.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, p.id)}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                  onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
+                  onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
+                  onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
                 >
                   <span className="text-[#1DB954]"><Folder size={16} /></span>
                   <span className="truncate">{p.name}</span>
                 </Link>
               ))}
-              <Link
-                to="/?crate=unsorted"
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === 'unsorted' ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
-              >
-              <span className="text-[#1DB954]"><Folder size={16} /></span>
-              Unsorted
-            </Link>
-            <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><Plus size={16} /></span>
-              Manage Crates
-            </Link>
-          </div>
+              <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
+                <span className="text-[#1DB954]"><Plus size={16} /></span>
+                Manage Crates
+              </Link>
+            </div>
         </nav>
         <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
         <div className="flex items-center justify-between mt-1">
@@ -185,27 +178,20 @@ export function Layout() {
                 <Link
                   key={p.id}
                   to={`/?crate=${p.id}`}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
-                  onDragOver={(e) => handleDragOver(e, p.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, p.id)}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                  onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
+                  onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
+                  onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
                 >
                   <span className="text-[#1DB954]"><Folder size={16} /></span>
                   <span className="truncate">{p.name}</span>
                 </Link>
               ))}
-              <Link
-                to="/?crate=unsorted"
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === 'unsorted' ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'}`}
-              >
-                <span className="text-[#1DB954]"><Folder size={16} /></span>
-                Unsorted
-              </Link>
               <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><Plus size={16} /></span>
-              Manage Crates
-            </Link>
-          </div>
+                <span className="text-[#1DB954]"><Plus size={16} /></span>
+                Manage Crates
+              </Link>
+            </div>
         </nav>
           <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
           <div className="flex items-center justify-between mt-1">

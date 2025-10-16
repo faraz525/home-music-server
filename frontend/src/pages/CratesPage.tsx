@@ -164,7 +164,7 @@ export function CratesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.isArray(crates.crates) && crates.crates.map((crate) => (
+        {Array.isArray(crates.crates) && crates.crates.filter(c => c.id !== 'unsorted').map((crate) => (
           <div 
             key={crate.id} 
             className={`card p-4 group transition-all ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
@@ -234,7 +234,7 @@ export function CratesPage() {
         ))}
       </div>
 
-      {(!Array.isArray(crates.crates) || crates.crates.length === 0) && (
+      {(!Array.isArray(crates.crates) || crates.crates.filter(c => c.id !== 'unsorted').length === 0) && (
         <div className="text-center py-12">
           <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
           <h3 className="text-lg font-semibold mb-2">No crates yet</h3>
