@@ -260,7 +260,7 @@ export function LibraryPage() {
               Add to crate
             </button>
             {showCrateDropdown && (
-              <div className="crate-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
+              <div className="crate-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-[9999]">
                 {loadingCrates ? (
                   <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
                 ) : (
