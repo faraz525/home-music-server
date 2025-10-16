@@ -178,7 +178,7 @@ func GetHandler(manager *Manager) gin.HandlerFunc {
 	}
 }
 
-func StreamHandler(manager *Manager) gin.HandlerFunc {
+func StreamHandler(manager *Manager, playlistsManager *playlists.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		trackID := c.Param("id")
 		userID, _ := c.Get("user_id")
@@ -190,8 +190,19 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Check ownership
-		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+		// Check access: admin OR owner OR track is in public playlist
+		hasAccess := false
+		if userRole == "admin" || track.OwnerUserID == userID.(string) {
+			hasAccess = true
+		} else {
+			// Check if track is in a public playlist
+			inPublic, err := playlistsManager.IsTrackInPublicPlaylist(trackID)
+			if err == nil && inPublic {
+				hasAccess = true
+			}
+		}
+
+		if !hasAccess {
 			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "Access denied"}})
 			return
 		}
@@ -244,6 +255,50 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Track deleted successfully"})
+	}
+}
+
+// DownloadHandler handles track download requests
+func DownloadHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		trackID := c.Param("id")
+		userID, _ := c.Get("user_id")
+		userRole, _ := c.Get("user_role")
+
+		track, err := manager.GetTrack(c.Request.Context(), trackID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
+			return
+		}
+
+		// Only allow download if user owns the track (original or has reference)
+		// For now, only allow if user is owner or admin
+		// TODO: Check track_references table for traded tracks
+		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "You can only download tracks you own"}})
+			return
+		}
+
+		// Open file via manager/storage
+		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
+			return
+		}
+		defer file.Close()
+
+		// Set headers for download
+		filename := track.OriginalFilename
+		if filename == "" {
+			filename = trackID + ".mp3" // fallback
+		}
+
+		c.Header("Content-Type", track.ContentType)
+		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+		// Stream the file
+		io.Copy(c.Writer, file)
 	}
 }
 

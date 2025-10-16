@@ -12,7 +12,8 @@ func Routes(m *Manager, pm *playlists.Manager) func(*gin.RouterGroup) {
 		g.POST("", UploadHandler(m, pm))
 		g.GET("", ListHandler(m, pm))
 		g.GET("/:id", GetHandler(m))
-		g.GET("/:id/stream", StreamHandler(m))
+		g.GET("/:id/stream", StreamHandler(m, pm))
+		g.GET("/:id/download", DownloadHandler(m))
 		g.DELETE("/:id", DeleteHandler(m))
 	}
 }

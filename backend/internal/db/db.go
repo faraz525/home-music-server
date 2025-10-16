@@ -40,30 +40,54 @@ func New(dataDir string) (*DB, error) {
 func (d *DB) Close() error { return d.DB.Close() }
 
 func (d *DB) migrate() error {
-	// Check if all required tables exist
-	requiredTables := []string{"users", "tracks", "refresh_tokens", "playlists", "playlist_tracks"}
-	allTablesExist := true
-
-	for _, table := range requiredTables {
-		var tableCount int
-		_ = d.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&tableCount)
-		if tableCount == 0 {
-			allTablesExist = false
-			break
-		}
-	}
-
-	if allTablesExist {
-		return nil
-	}
-
-	// Apply schema.sql if any tables are missing
-	b, err := migrationsFS.ReadFile("migrations/schema.sql")
+	// Create migrations tracking table if it doesn't exist
+	_, err := d.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version TEXT PRIMARY KEY,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
 	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
+		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
-	if _, err := d.Exec(string(b)); err != nil {
-		return fmt.Errorf("failed to execute schema: %w", err)
+
+	// List of migrations to apply in order
+	migrations := []string{
+		"migrations/schema.sql",
+		"migrations/002_sharing_and_trading.sql",
 	}
+
+	for _, migrationFile := range migrations {
+		// Check if migration already applied
+		var count int
+		err := d.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", migrationFile).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("failed to check migration status: %w", err)
+		}
+
+		if count > 0 {
+			// Migration already applied, skip
+			continue
+		}
+
+		// Read and execute migration
+		b, err := migrationsFS.ReadFile(migrationFile)
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", migrationFile, err)
+		}
+
+		if _, err := d.Exec(string(b)); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", migrationFile, err)
+		}
+
+		// Mark migration as applied
+		_, err = d.Exec("INSERT INTO schema_migrations (version) VALUES (?)", migrationFile)
+		if err != nil {
+			return fmt.Errorf("failed to record migration %s: %w", migrationFile, err)
+		}
+
+		fmt.Printf("[CrateDrop] Applied migration: %s\n", migrationFile)
+	}
+
 	return nil
 }
