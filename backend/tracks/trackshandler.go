@@ -107,17 +107,11 @@ func ListHandler(manager *Manager, playlistsManager *playlists.Manager) gin.Hand
 					}
 				}
 			}
-		} else if userRole == "admin" && q != "" {
-			// Admin can search all tracks
-			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, q)
-		} else if userRole == "admin" {
-			// Admin can see all tracks
-			trackList, err = manager.GetAllTracks(c.Request.Context(), limit, offset, "")
 		} else if q != "" {
-			// Regular users can search their tracks
+			// Search user's own tracks (including admins)
 			trackList, err = manager.SearchTracks(c.Request.Context(), q, userID.(string), limit, offset)
 		} else {
-			// Regular users see only their tracks
+			// Show user's own tracks (including admins)
 			trackList, err = manager.GetTracks(c.Request.Context(), userID.(string), limit, offset)
 		}
 

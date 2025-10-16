@@ -494,3 +494,22 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 		HasNext: hasNext,
 	}, nil
 }
+
+// GetUnsortedTrackCount returns the count of tracks not in any playlist for a user
+func (r *Repository) GetUnsortedTrackCount(userID string) (int, error) {
+	countQuery := `
+		SELECT COUNT(*) FROM tracks t
+		WHERE t.owner_user_id = ?
+		AND t.id NOT IN (
+			SELECT pt.track_id FROM playlist_tracks pt
+			INNER JOIN playlists p ON pt.playlist_id = p.id
+			WHERE p.owner_user_id = ?
+		)
+	`
+	var total int
+	err := r.db.QueryRow(countQuery, userID, userID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get unsorted track count: %w", err)
+	}
+	return total, nil
+}
