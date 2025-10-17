@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,11 @@ import (
 
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
+
+// TradeReferenceChecker interface for checking track references
+type TradeReferenceChecker interface {
+	HasTrackReference(ctx context.Context, userID, trackID string) (bool, error)
+}
 
 type UploadRequest struct {
 	Title  string `form:"title"`
@@ -191,11 +197,14 @@ func StreamHandler(manager *Manager, playlistsManager *playlists.Manager) gin.Ha
 		}
 
 		// Check access: admin OR owner OR track is in public playlist
+		// Optimize by checking cheap operations first (ownership) before DB query
 		hasAccess := false
+		
+		// Fast path: check ownership first (no DB query needed)
 		if userRole == "admin" || track.OwnerUserID == userID.(string) {
 			hasAccess = true
 		} else {
-			// Check if track is in a public playlist
+			// Slow path: only query DB if user doesn't own the track
 			inPublic, err := playlistsManager.IsTrackInPublicPlaylist(trackID)
 			if err == nil && inPublic {
 				hasAccess = true
@@ -259,7 +268,7 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 }
 
 // DownloadHandler handles track download requests
-func DownloadHandler(manager *Manager) gin.HandlerFunc {
+func DownloadHandler(manager *Manager, tradesRepo TradeReferenceChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		trackID := c.Param("id")
 		userID, _ := c.Get("user_id")
@@ -271,10 +280,19 @@ func DownloadHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Only allow download if user owns the track (original or has reference)
-		// For now, only allow if user is owner or admin
-		// TODO: Check track_references table for traded tracks
-		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+		// Check if user can download: admin OR owner OR has reference via trade
+		canDownload := false
+		if userRole == "admin" || track.OwnerUserID == userID.(string) {
+			canDownload = true
+		} else if tradesRepo != nil {
+			// Check if user has this track via trade
+			hasRef, err := tradesRepo.HasTrackReference(c.Request.Context(), userID.(string), trackID)
+			if err == nil && hasRef {
+				canDownload = true
+			}
+		}
+
+		if !canDownload {
 			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "You can only download tracks you own"}})
 			return
 		}

@@ -70,7 +70,7 @@ func main() {
 	auth.Routes(authManager)(api)
 	protected := api.Group("")
 	protected.Use(auth.AuthMiddleware())
-	tracks.Routes(tracksManager, playlistsManager)(protected)
+	tracks.Routes(tracksManager, playlistsManager, tradesRepo)(protected)
 	playlists.Routes(playlistsManager)(protected)
 	users.RegisterRoutes(api, usersManager)
 	trades.RegisterRoutes(api, tradesManager)

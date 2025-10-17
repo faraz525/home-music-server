@@ -36,6 +36,20 @@ func (m *Manager) RequestTrade(ctx context.Context, requesterUserID string, req 
 		return fmt.Errorf("no tracks offered")
 	}
 
+	// Prevent too many tracks in one trade (Pi resource constraint)
+	if len(req.OfferTrackIDs) > 10 {
+		return fmt.Errorf("cannot offer more than 10 tracks in a single trade")
+	}
+
+	// Check for duplicate tracks in offer
+	trackSet := make(map[string]bool)
+	for _, trackID := range req.OfferTrackIDs {
+		if trackSet[trackID] {
+			return fmt.Errorf("duplicate track in offer: %s", trackID)
+		}
+		trackSet[trackID] = true
+	}
+
 	// Get the crate to check trade ratio and ownership
 	if m.playlistGetter == nil {
 		return fmt.Errorf("playlist getter not set")

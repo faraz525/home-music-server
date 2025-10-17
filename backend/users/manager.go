@@ -27,6 +27,11 @@ func (m *Manager) SearchUsers(ctx context.Context, query string, limit, offset i
 		return []*imodels.UserSearchResult{}, 0, nil
 	}
 
+	// Require minimum 2 characters to prevent expensive LIKE queries on Pi
+	if len(query) < 2 {
+		return []*imodels.UserSearchResult{}, 0, fmt.Errorf("search query must be at least 2 characters")
+	}
+
 	users, total, err := m.repo.SearchUsers(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -83,11 +88,16 @@ func isValidUsername(username string) bool {
 		return false
 	}
 
+	hasAlphanumeric := false
 	for _, char := range username {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			hasAlphanumeric = true
+		}
 		if !((char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '_' || char == '-') {
 			return false
 		}
 	}
 
-	return true
+	// Require at least one alphanumeric character (prevent "---" or "___")
+	return hasAlphanumeric
 }

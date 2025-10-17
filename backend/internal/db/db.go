@@ -27,6 +27,12 @@ func New(dataDir string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+	
+	// Set connection limits for Raspberry Pi resource constraints
+	sqlDB.SetMaxOpenConns(10)  // Limit concurrent connections
+	sqlDB.SetMaxIdleConns(5)   // Reduce idle connections
+	sqlDB.SetConnMaxLifetime(0) // Reuse connections indefinitely
+	
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
