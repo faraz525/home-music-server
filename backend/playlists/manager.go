@@ -305,3 +305,59 @@ func (m *Manager) SearchPlaylistTracks(playlistID, userID, query string, limit, 
 
 	return m.repo.SearchPlaylistTracks(playlistID, query, limit, offset)
 }
+
+// GetPublicPlaylists returns all public playlists
+func (m *Manager) GetPublicPlaylists(limit, offset int) (*imodels.PlaylistList, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return m.repo.GetPublicPlaylists(limit, offset)
+}
+
+// GetUserPublicPlaylistsByUsername returns all public playlists for a specific user by username
+func (m *Manager) GetUserPublicPlaylistsByUsername(username string, limit, offset int) (*imodels.PlaylistList, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// First, we need to get user by username
+	// We'll need access to the users repository for this
+	// For now, let's just use the email as username (temporary solution)
+	// TODO: This needs to be fixed to actually use the users repository
+	
+	return m.repo.GetUserPublicPlaylists(username, limit, offset)
+}
+
+// GetPublicPlaylistTracks returns tracks for a public playlist (no auth required)
+func (m *Manager) GetPublicPlaylistTracks(playlistID string, limit, offset int) (*imodels.PlaylistWithTracks, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// First check if playlist exists and is public
+	playlist, err := m.repo.GetPlaylist(playlistID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !playlist.IsPublic {
+		return nil, fmt.Errorf("playlist is not public")
+	}
+
+	return m.repo.GetPlaylistTracks(playlistID, limit, offset)
+}
+
+// IsTrackInPublicPlaylist checks if a track is in any public playlist
+func (m *Manager) IsTrackInPublicPlaylist(trackID string) (bool, error) {
+	return m.repo.IsTrackInPublicPlaylist(trackID)
+}

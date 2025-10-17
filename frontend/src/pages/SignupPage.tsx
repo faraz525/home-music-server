@@ -6,6 +6,7 @@ export function SignupPage() {
   const { signup } = useAuth()
   const nav = useNavigate()
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -15,7 +16,7 @@ export function SignupPage() {
     setLoading(true)
     setError('')
     try {
-      await signup(email, password)
+      await signup(email, username, password)
       nav('/')
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || 'Signup failed')
@@ -33,6 +34,21 @@ export function SignupPage() {
           <div>
             <label className="block text-sm mb-1">Email</label>
             <input className="input w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Username</label>
+            <input 
+              className="input w-full" 
+              type="text" 
+              value={username} 
+              onChange={(e) => setUsername(e.target.value)} 
+              minLength={3}
+              maxLength={30}
+              pattern="[a-z0-9_-]+"
+              title="Username can only contain lowercase letters, numbers, underscores, and hyphens"
+              required 
+            />
+            <p className="text-xs text-[#A1A1A1] mt-1">3-30 characters, lowercase letters, numbers, _ or -</p>
           </div>
           <div>
             <label className="block text-sm mb-1">Password</label>

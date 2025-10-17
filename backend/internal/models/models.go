@@ -5,6 +5,7 @@ import "time"
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
+	Username     *string   `json:"username,omitempty"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -41,6 +42,7 @@ type RefreshToken struct {
 
 type SignupRequest struct {
 	Email    string `json:"email" binding:"required,email"`
+	Username string `json:"username" binding:"required,min=3,max=30"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
@@ -86,13 +88,16 @@ type TrackList struct {
 
 // Playlist represents a music playlist
 type Playlist struct {
-	ID          string    `json:"id"`
-	OwnerUserID string    `json:"owner_user_id"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description,omitempty"`
-	IsDefault   bool      `json:"is_default"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID             string    `json:"id"`
+	OwnerUserID    string    `json:"owner_user_id"`
+	Name           string    `json:"name"`
+	Description    *string   `json:"description,omitempty"`
+	IsDefault      bool      `json:"is_default"`
+	IsPublic       bool      `json:"is_public"`
+	TradeRatioGive int       `json:"trade_ratio_give"`
+	TradeRatioTake int       `json:"trade_ratio_take"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // PlaylistTrack represents the relationship between a playlist and a track
@@ -125,14 +130,20 @@ type PlaylistWithTracks struct {
 
 // CreatePlaylistRequest represents a request to create a playlist
 type CreatePlaylistRequest struct {
-	Name        string  `json:"name" binding:"required"`
-	Description *string `json:"description,omitempty"`
+	Name           string  `json:"name" binding:"required"`
+	Description    *string `json:"description,omitempty"`
+	IsPublic       *bool   `json:"is_public,omitempty"`
+	TradeRatioGive *int    `json:"trade_ratio_give,omitempty"`
+	TradeRatioTake *int    `json:"trade_ratio_take,omitempty"`
 }
 
 // UpdatePlaylistRequest represents a request to update a playlist
 type UpdatePlaylistRequest struct {
-	Name        string  `json:"name" binding:"required"`
-	Description *string `json:"description,omitempty"`
+	Name           string  `json:"name" binding:"required"`
+	Description    *string `json:"description,omitempty"`
+	IsPublic       *bool   `json:"is_public,omitempty"`
+	TradeRatioGive *int    `json:"trade_ratio_give,omitempty"`
+	TradeRatioTake *int    `json:"trade_ratio_take,omitempty"`
 }
 
 // AddTracksToPlaylistRequest represents a request to add tracks to a playlist
@@ -143,4 +154,45 @@ type AddTracksToPlaylistRequest struct {
 // RemoveTracksFromPlaylistRequest represents a request to remove tracks from a playlist
 type RemoveTracksFromPlaylistRequest struct {
 	TrackIDs []string `json:"track_ids" binding:"required"`
+}
+
+// TradeRequest represents a request to trade songs
+type TradeRequest struct {
+	CrateID       string   `json:"crate_id" binding:"required"`
+	TrackID       string   `json:"track_id" binding:"required"`
+	OfferTrackIDs []string `json:"offer_track_ids" binding:"required"`
+}
+
+// TradeTransaction represents a completed trade
+type TradeTransaction struct {
+	ID               string    `json:"id"`
+	RequesterUserID  string    `json:"requester_user_id"`
+	OwnerUserID      string    `json:"owner_user_id"`
+	CrateID          string    `json:"crate_id"`
+	RequestedTrackID string    `json:"requested_track_id"`
+	GivenTrackIDs    string    `json:"given_track_ids"`
+	TradeRatio       string    `json:"trade_ratio"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// TrackReference represents a track reference (for traded songs)
+type TrackReference struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	TrackID      string    `json:"track_id"`
+	SourceUserID string    `json:"source_user_id"`
+	AcquiredVia  string    `json:"acquired_via"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// UserSearchResult represents a user in search results
+type UserSearchResult struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email,omitempty"` // Only shown to admins
+}
+
+// UpdateUsernameRequest represents a request to update username
+type UpdateUsernameRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=30"`
 }

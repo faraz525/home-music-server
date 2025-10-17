@@ -88,3 +88,44 @@ export const tracksApi = {
   getUnsorted: (params?: UnsortedParams) =>
     api.get('/api/tracks', { params: { ...(params || {}), playlist_id: 'unsorted' } }),
 }
+
+// User API functions
+export const usersApi = {
+  search: (query: string, params?: { limit?: number; offset?: number }) =>
+    api.get('/api/users/search', { params: { q: query, ...params } }),
+
+  getByUsername: (username: string) =>
+    api.get(`/api/users/${username}`),
+
+  updateUsername: (username: string) =>
+    api.put('/api/users/me/username', { username }),
+
+  getPublicCrates: (username: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/api/users/${username}/crates`, { params }),
+}
+
+// Public crates API
+export const publicCratesApi = {
+  list: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/crates/public', { params }),
+
+  getTracks: (crateId: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/api/crates/${crateId}/public`, { params }),
+}
+
+// Trades API
+export const tradesApi = {
+  request: (data: { crate_id: string; track_id: string; offer_track_ids: string[] }) =>
+    api.post('/api/trades/request', data),
+
+  getHistory: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/trades/history', { params }),
+
+  getAvailableTracks: () =>
+    api.get('/api/trades/available'),
+}
+
+// Download track
+export const downloadTrack = (trackId: string) => {
+  window.location.href = `/api/tracks/${trackId}/download`
+}

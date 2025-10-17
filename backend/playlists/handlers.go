@@ -403,3 +403,118 @@ func GetUnsortedTracksHandler(manager *Manager) gin.HandlerFunc {
 		})
 	}
 }
+
+// GetPublicPlaylistsHandler returns all public playlists
+func GetPublicPlaylistsHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Parse pagination parameters
+		limitStr := c.DefaultQuery("limit", "20")
+		offsetStr := c.DefaultQuery("offset", "0")
+
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > 100 {
+			limit = 20
+		}
+
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		playlists, err := manager.GetPublicPlaylists(limit, offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "server_error", Message: "Failed to fetch public playlists"},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, imodels.APIResponse{
+			Success: true,
+			Data:    playlists,
+		})
+	}
+}
+
+// GetUserPublicPlaylistsHandler returns all public playlists for a specific user
+func GetUserPublicPlaylistsHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		username := c.Param("username")
+
+		// Parse pagination parameters
+		limitStr := c.DefaultQuery("limit", "20")
+		offsetStr := c.DefaultQuery("offset", "0")
+
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > 100 {
+			limit = 20
+		}
+
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		playlists, err := manager.GetUserPublicPlaylistsByUsername(username, limit, offset)
+		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if err.Error() == "user not found" {
+				statusCode = http.StatusNotFound
+			}
+
+			c.JSON(statusCode, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "server_error", Message: err.Error()},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, imodels.APIResponse{
+			Success: true,
+			Data:    playlists,
+		})
+	}
+}
+
+// GetPublicPlaylistTracksHandler returns tracks for a public playlist
+func GetPublicPlaylistTracksHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		playlistID := c.Param("id")
+
+		// Parse pagination parameters
+		limitStr := c.DefaultQuery("limit", "20")
+		offsetStr := c.DefaultQuery("offset", "0")
+
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > 100 {
+			limit = 20
+		}
+
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		playlistTracks, err := manager.GetPublicPlaylistTracks(playlistID, limit, offset)
+		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if err.Error() == "playlist not found" {
+				statusCode = http.StatusNotFound
+			} else if err.Error() == "playlist is not public" {
+				statusCode = http.StatusForbidden
+			}
+
+			c.JSON(statusCode, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "access_denied", Message: err.Error()},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, imodels.APIResponse{
+			Success: true,
+			Data:    playlistTracks,
+		})
+	}
+}

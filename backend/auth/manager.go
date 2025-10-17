@@ -52,8 +52,9 @@ func (m *Manager) SetPlaylistCreator(creator PlaylistCreator) {
 
 // Signup handles user registration
 func (m *Manager) Signup(ctx context.Context, req *imodels.SignupRequest) (*imodels.Tokens, error) {
-	// Normalize email
+	// Normalize email and username
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 
 	// Check if user already exists
 	existingUser, err := m.repo.GetUserByEmail(ctx, req.Email)
@@ -84,8 +85,12 @@ func (m *Manager) Signup(ctx context.Context, req *imodels.SignupRequest) (*imod
 	}
 
 	// Create user
-	user, err := m.repo.CreateUser(ctx, req.Email, hashedPassword, role)
+	user, err := m.repo.CreateUser(ctx, req.Email, req.Username, hashedPassword, role)
 	if err != nil {
+		// Check if it's a unique constraint violation on username
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") && strings.Contains(err.Error(), "username") {
+			return nil, errors.New("username already taken")
+		}
 		return nil, errors.New("failed to create user")
 	}
 

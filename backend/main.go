@@ -14,6 +14,8 @@ import (
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/server"
 	"github.com/faraz525/home-music-server/backend/tracks"
+	"github.com/faraz525/home-music-server/backend/trades"
+	"github.com/faraz525/home-music-server/backend/users"
 )
 
 func main() {
@@ -38,6 +40,8 @@ func main() {
 	authRepo := auth.NewRepository(db)
 	tracksRepo := tracks.NewRepository(db)
 	playlistsRepo := playlists.NewRepository(db)
+	usersRepo := users.NewRepository(db)
+	tradesRepo := trades.NewRepository(db)
 	fmt.Printf("[CrateDrop] Repositories initialized\n")
 
 	// Initialize managers and infra
@@ -51,7 +55,13 @@ func main() {
 	extractor := mlocal.New()
 	tracksManager := tracks.NewManager(tracksRepo, storage, extractor)
 	playlistsManager := playlists.NewManager(playlistsRepo)
-	fmt.Printf("[CrateDrop] Tracks and playlists managers initialized\n")
+	usersManager := users.NewManager(usersRepo)
+	tradesManager := trades.NewManager(tradesRepo)
+	
+	// Set dependencies
+	tradesManager.SetPlaylistGetter(playlistsRepo)
+	
+	fmt.Printf("[CrateDrop] Tracks, playlists, users, and trades managers initialized\n")
 
 	// Initialize router and API group
 	r, api := server.NewRouter()
@@ -60,8 +70,10 @@ func main() {
 	auth.Routes(authManager)(api)
 	protected := api.Group("")
 	protected.Use(auth.AuthMiddleware())
-	tracks.Routes(tracksManager, playlistsManager)(protected)
+	tracks.Routes(tracksManager, playlistsManager, tradesRepo)(protected)
 	playlists.Routes(playlistsManager)(protected)
+	users.RegisterRoutes(api, usersManager)
+	trades.RegisterRoutes(api, tradesManager)
 
 	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)

@@ -20,13 +20,13 @@ func NewRepository(db *db.DB) *Repository {
 }
 
 // CreateUser creates a new user in the database
-func (r *Repository) CreateUser(ctx context.Context, email, passwordHash, role string) (*imodels.User, error) {
+func (r *Repository) CreateUser(ctx context.Context, email, username, passwordHash, role string) (*imodels.User, error) {
 	id := utils.GenerateUserID()
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
-		"INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, email, passwordHash, role, now, now,
+		"INSERT INTO users (id, email, username, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		id, email, username, passwordHash, role, now, now,
 	)
 	if err != nil {
 		return nil, err
@@ -35,6 +35,7 @@ func (r *Repository) CreateUser(ctx context.Context, email, passwordHash, role s
 	return &imodels.User{
 		ID:           id,
 		Email:        email,
+		Username:     &username,
 		PasswordHash: passwordHash,
 		Role:         role,
 		CreatedAt:    now,
@@ -56,9 +57,9 @@ func (r *Repository) AdminExists(ctx context.Context) (bool, error) {
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*imodels.User, error) {
 	var user imodels.User
 	err := r.db.QueryRowContext(ctx,
-		"SELECT id, email, password_hash, role, created_at, updated_at FROM users WHERE email = ?",
+		"SELECT id, email, username, password_hash, role, created_at, updated_at FROM users WHERE email = ?",
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.Username, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -69,9 +70,9 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*imodels
 func (r *Repository) GetUserByID(ctx context.Context, id string) (*imodels.User, error) {
 	var user imodels.User
 	err := r.db.QueryRowContext(ctx,
-		"SELECT id, email, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, email, username, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.Username, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenID string) err
 
 // GetUsers retrieves all users (admin only)
 func (r *Repository) GetUsers(ctx context.Context) ([]*imodels.User, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC")
+	rows, err := r.db.QueryContext(ctx, "SELECT id, email, username, role, created_at, updated_at FROM users ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +132,7 @@ func (r *Repository) GetUsers(ctx context.Context) ([]*imodels.User, error) {
 	var users []*imodels.User
 	for rows.Next() {
 		var user imodels.User
-		err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Email, &user.Username, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
