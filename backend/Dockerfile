@@ -8,7 +8,7 @@ COPY go.mod ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o /out/server ./main.go
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -tags="libsqlite3" -o /out/server ./main.go
 
 FROM debian:bookworm-slim
 
