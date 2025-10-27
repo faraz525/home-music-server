@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/gin-gonic/gin"
@@ -180,11 +181,16 @@ func GetHandler(manager *Manager) gin.HandlerFunc {
 
 func StreamHandler(manager *Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		startTime := time.Now()
+		fmt.Printf("[StreamProfiler] Request started at %v\n", startTime)
+
 		trackID := c.Param("id")
 		userID, _ := c.Get("user_id")
 		userRole, _ := c.Get("user_role")
 
+		trackStart := time.Now()
 		track, err := manager.GetStreamInfo(c.Request.Context(), trackID)
+		fmt.Printf("[StreamProfiler] GetStreamInfo took: %v\n", time.Since(trackStart))
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
 			return
@@ -197,7 +203,9 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		}
 
 		// Open file via manager/storage
+		openStart := time.Now()
 		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
+		fmt.Printf("[StreamProfiler] OpenFile took: %v\n", time.Since(openStart))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
 			return
@@ -208,6 +216,7 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		rangeHeader := c.GetHeader("Range")
 		if rangeHeader != "" {
 			handleRangeRequest(c, file, info.Size, track.ContentType, rangeHeader)
+			fmt.Printf("[StreamProfiler] Total request time: %v\n", time.Since(startTime))
 			return
 		}
 
@@ -215,7 +224,11 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		c.Header("Content-Type", track.ContentType)
 		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
 		c.Header("Accept-Ranges", "bytes")
+
+		streamStart := time.Now()
 		io.Copy(c.Writer, file)
+		fmt.Printf("[StreamProfiler] io.Copy took: %v\n", time.Since(streamStart))
+		fmt.Printf("[StreamProfiler] Total request time: %v\n", time.Since(startTime))
 	}
 }
 

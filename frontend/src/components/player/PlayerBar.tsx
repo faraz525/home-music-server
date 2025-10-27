@@ -170,7 +170,12 @@ export function PlayerBar() {
           <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12">{formatTime(duration)}</div>
         </div>
 
-        <audio ref={audioRef} src={current?.streamUrl} preload="metadata" crossOrigin="use-credentials" />
+        <audio 
+          ref={audioRef} 
+          src={current?.streamUrl} 
+          preload="metadata"
+          crossOrigin="use-credentials"
+        />
       </div>
     </div>
   )
