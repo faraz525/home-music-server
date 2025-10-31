@@ -5,6 +5,9 @@ export type Crate = {
   name: string
   description?: string
   is_default: boolean
+  is_public: boolean
+  trade_ratio_give: number
+  trade_ratio_take: number
   created_at: string
   updated_at: string
 }
@@ -30,11 +33,17 @@ export type CrateList = {
 export type CreateCrateRequest = {
   name: string
   description?: string
+  is_public?: boolean
+  trade_ratio_give?: number
+  trade_ratio_take?: number
 }
 
 export type UpdateCrateRequest = {
   name: string
   description?: string
+  is_public?: boolean
+  trade_ratio_give?: number
+  trade_ratio_take?: number
 }
 
 export type AddTracksToCrateRequest = {

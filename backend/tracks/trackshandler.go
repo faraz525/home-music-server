@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,11 @@ import (
 
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
+
+// TradeReferenceChecker interface for checking track references
+type TradeReferenceChecker interface {
+	HasTrackReference(ctx context.Context, userID, trackID string) (bool, error)
+}
 
 type UploadRequest struct {
 	Title  string `form:"title"`
@@ -179,7 +185,7 @@ func GetHandler(manager *Manager) gin.HandlerFunc {
 	}
 }
 
-func StreamHandler(manager *Manager) gin.HandlerFunc {
+func StreamHandler(manager *Manager, playlistsManager *playlists.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime := time.Now()
 		fmt.Printf("[StreamProfiler] Request started at %v\n", startTime)
@@ -196,8 +202,22 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Check ownership
-		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+		// Check access: admin OR owner OR track is in public playlist
+		// Optimize by checking cheap operations first (ownership) before DB query
+		hasAccess := false
+		
+		// Fast path: check ownership first (no DB query needed)
+		if userRole == "admin" || track.OwnerUserID == userID.(string) {
+			hasAccess = true
+		} else {
+			// Slow path: only query DB if user doesn't own the track
+			inPublic, err := playlistsManager.IsTrackInPublicPlaylist(trackID)
+			if err == nil && inPublic {
+				hasAccess = true
+			}
+		}
+
+		if !hasAccess {
 			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "Access denied"}})
 			return
 		}
@@ -266,6 +286,59 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Track deleted successfully"})
+	}
+}
+
+// DownloadHandler handles track download requests
+func DownloadHandler(manager *Manager, tradesRepo TradeReferenceChecker) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		trackID := c.Param("id")
+		userID, _ := c.Get("user_id")
+		userRole, _ := c.Get("user_role")
+
+		track, err := manager.GetTrack(c.Request.Context(), trackID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
+			return
+		}
+
+		// Check if user can download: admin OR owner OR has reference via trade
+		canDownload := false
+		if userRole == "admin" || track.OwnerUserID == userID.(string) {
+			canDownload = true
+		} else if tradesRepo != nil {
+			// Check if user has this track via trade
+			hasRef, err := tradesRepo.HasTrackReference(c.Request.Context(), userID.(string), trackID)
+			if err == nil && hasRef {
+				canDownload = true
+			}
+		}
+
+		if !canDownload {
+			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "You can only download tracks you own"}})
+			return
+		}
+
+		// Open file via manager/storage
+		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
+			return
+		}
+		defer file.Close()
+
+		// Set headers for download
+		filename := track.OriginalFilename
+		if filename == "" {
+			filename = trackID + ".mp3" // fallback
+		}
+
+		c.Header("Content-Type", track.ContentType)
+		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+		// Stream the file
+		io.Copy(c.Writer, file)
 	}
 }
 
