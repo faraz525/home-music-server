@@ -220,14 +220,23 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Full file response
+		// Default to sending first chunk for faster initial playback
+		// This allows the audio element to start playing quickly without downloading the entire file
+		defaultChunkSize := int64(4 * 1024 * 1024) // 4 MB initial chunk
+		chunkSize := defaultChunkSize
+		if info.Size < defaultChunkSize {
+			chunkSize = info.Size
+		}
+
 		c.Header("Content-Type", track.ContentType)
-		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+		c.Header("Content-Length", strconv.FormatInt(chunkSize, 10))
+		c.Header("Content-Range", fmt.Sprintf("bytes 0-%d/%d", chunkSize-1, info.Size))
 		c.Header("Accept-Ranges", "bytes")
+		c.Status(http.StatusPartialContent)
 
 		streamStart := time.Now()
-		io.Copy(c.Writer, file)
-		fmt.Printf("[StreamProfiler] io.Copy took: %v\n", time.Since(streamStart))
+		io.CopyN(c.Writer, file, chunkSize)
+		fmt.Printf("[StreamProfiler] io.CopyN took: %v\n", time.Since(streamStart))
 		fmt.Printf("[StreamProfiler] Total request time: %v\n", time.Since(startTime))
 	}
 }
