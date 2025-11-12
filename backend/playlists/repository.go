@@ -582,7 +582,7 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE t.owner_user_id = ?
 		AND pt.track_id IS NULL
-		AND fts MATCH ?
+		AND tracks_fts MATCH ?
 		ORDER BY fts.rank, t.created_at DESC
 		LIMIT ? OFFSET ?
 	`
@@ -629,7 +629,7 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE t.owner_user_id = ?
 		AND pt.track_id IS NULL
-		AND fts MATCH ?
+		AND tracks_fts MATCH ?
 	`
 	var total int
 	err = r.db.QueryRow(countQuery, userID, query).Scan(&total)
@@ -658,7 +658,7 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE pt.playlist_id = ?
-		AND fts MATCH ?
+		AND tracks_fts MATCH ?
 		ORDER BY fts.rank, pt.position, t.created_at DESC
 		LIMIT ? OFFSET ?
 	`
@@ -704,7 +704,7 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE pt.playlist_id = ?
-		AND fts MATCH ?
+		AND tracks_fts MATCH ?
 	`
 	var total int
 	err = r.db.QueryRow(countQuery, playlistID, query).Scan(&total)

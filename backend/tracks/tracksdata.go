@@ -81,7 +81,7 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 				t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
 			FROM tracks t
 			INNER JOIN tracks_fts fts ON t.id = fts.track_id
-			WHERE fts MATCH ?
+			WHERE tracks_fts MATCH ?
 			ORDER BY fts.rank, t.created_at DESC
 			LIMIT ? OFFSET ?
 		`
@@ -174,7 +174,7 @@ func (r *Repository) SearchTracks(ctx context.Context, query string, userID stri
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		WHERE t.owner_user_id = ? 
-		AND fts MATCH ?
+		AND tracks_fts MATCH ?
 		ORDER BY fts.rank, t.created_at DESC
 		LIMIT ? OFFSET ?
 	`
