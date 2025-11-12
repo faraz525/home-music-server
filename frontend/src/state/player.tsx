@@ -6,6 +6,7 @@ export type QueueItem = {
   title?: string
   artist?: string
   streamUrl: string
+  durationSeconds?: number // Duration from database for immediate playback
 }
 
 type PlayerContextValue = {
@@ -44,7 +45,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         id: track.id,
         title: track.title || track.original_filename,
         artist: track.artist || 'Unknown Artist',
-        streamUrl: `/api/tracks/${track.id}/stream`
+        streamUrl: `/api/tracks/${track.id}/stream`,
+        durationSeconds: track.duration_seconds
       }))
     } catch (error) {
       console.error('Failed to fetch playlist tracks:', error)

@@ -27,7 +27,8 @@ func NewRouter() (*gin.Engine, *gin.RouterGroup) {
     r.Use(func(c *gin.Context) {
         c.Header("Access-Control-Allow-Origin", "*")
         c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
+        c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Range")
+        c.Header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
         c.Header("Access-Control-Allow-Credentials", "true")
         if c.Request.Method == "OPTIONS" {
             c.AbortWithStatus(204)

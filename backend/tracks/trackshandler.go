@@ -222,7 +222,7 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 
 		// Default to sending first chunk for faster initial playback
 		// This allows the audio element to start playing quickly without downloading the entire file
-		defaultChunkSize := int64(4 * 1024 * 1024) // 4 MB initial chunk
+		defaultChunkSize := int64(512 * 1024) // 512 KB initial chunk to minimize startup latency
 		chunkSize := defaultChunkSize
 		if info.Size < defaultChunkSize {
 			chunkSize = info.Size
@@ -232,6 +232,8 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		c.Header("Content-Length", strconv.FormatInt(chunkSize, 10))
 		c.Header("Content-Range", fmt.Sprintf("bytes 0-%d/%d", chunkSize-1, info.Size))
 		c.Header("Accept-Ranges", "bytes")
+		// Cache control for better performance - allow caching but revalidate
+		c.Header("Cache-Control", "public, max-age=3600, must-revalidate")
 		c.Status(http.StatusPartialContent)
 
 		streamStart := time.Now()
@@ -285,13 +287,37 @@ func handleRangeRequest(c *gin.Context, file io.ReadSeeker, fileSize int64, cont
 	}
 
 	var end int64
+	maxChunkSize := int64(512 * 1024)     // 512 KB max chunk size for subsequent requests
+	initialChunkSize := int64(256 * 1024) // 256 KB for initial request (faster playback start)
+
 	if rangeParts[1] == "" {
-		end = fileSize - 1
+		// Browser requested open-ended range (bytes=start-), limit to chunk size
+		// This prevents downloading entire file before audio starts playing
+		requestedEnd := fileSize - 1
+		var chunkSize int64
+		if start == 0 {
+			// Initial request - use smaller chunk for faster start
+			chunkSize = initialChunkSize
+		} else {
+			// Subsequent requests - use larger chunk
+			chunkSize = maxChunkSize
+		}
+		chunkEnd := start + chunkSize - 1
+		if chunkEnd < requestedEnd {
+			end = chunkEnd
+		} else {
+			end = requestedEnd
+		}
 	} else {
 		end, err = strconv.ParseInt(rangeParts[1], 10, 64)
 		if err != nil {
 			c.AbortWithStatus(http.StatusRequestedRangeNotSatisfiable)
 			return
+		}
+		// Limit explicit ranges to max chunk size as well
+		requestedSize := end - start + 1
+		if requestedSize > maxChunkSize {
+			end = start + maxChunkSize - 1
 		}
 	}
 
@@ -313,8 +339,13 @@ func handleRangeRequest(c *gin.Context, file io.ReadSeeker, fileSize int64, cont
 	c.Header("Content-Length", strconv.FormatInt(contentLength, 10))
 	c.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
 	c.Header("Accept-Ranges", "bytes")
+	// Cache control for better performance - allow caching but revalidate
+	c.Header("Cache-Control", "public, max-age=3600, must-revalidate")
 	c.Status(http.StatusPartialContent)
 
-	// Stream the range
+	// Stream the range with timing
+	streamStart := time.Now()
 	io.CopyN(c.Writer, file, contentLength)
+	fmt.Printf("[StreamProfiler] Range request: bytes %d-%d, io.CopyN took: %v, size: %d bytes\n",
+		start, end, time.Since(streamStart), contentLength)
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
+	"os/exec"
 
 	"github.com/faraz525/home-music-server/backend/internal/media/metadata"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
@@ -66,6 +67,14 @@ func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *mu
 		md = &metadata.AudioMetadata{}
 	}
 
+	// Sanitize over-sized metadata blobs (e.g. embedded album art) that delay playback
+	if updatedSize, err := m.sanitizeIfNeeded(ctx, contentType, fullPath); err != nil {
+		fmt.Printf("[CrateDrop] Warning: failed to sanitize track %s: %v\n", trackID, err)
+	} else if updatedSize > 0 {
+		fmt.Printf("[CrateDrop] Sanitized track %s metadata. Original size: %d bytes, new size: %d bytes\n", trackID, size, updatedSize)
+		size = updatedSize
+	}
+
 	// Create track record from metadata and request data
 	track := &imodels.Track{
 		OwnerUserID:      userID,
@@ -105,6 +114,75 @@ func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *mu
 	fmt.Printf("[CrateDrop] Track successfully saved with ID: %s\n", track.ID)
 
 	return track, nil
+}
+
+// sanitizeIfNeeded strips excessive metadata (like multi-megabyte album art) from MP3s.
+// Returns the new file size when sanitization occurs.
+func (m *Manager) sanitizeIfNeeded(ctx context.Context, contentType, fullPath string) (int64, error) {
+	if contentType != "audio/mpeg" {
+		return 0, nil
+	}
+
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open file for sanitization: %w", err)
+	}
+	defer file.Close()
+
+	header := make([]byte, 10)
+	if _, err := io.ReadFull(file, header); err != nil {
+		return 0, fmt.Errorf("failed to read ID3 header: %w", err)
+	}
+	if string(header[:3]) != "ID3" {
+		return 0, nil
+	}
+
+	tagSize := parseID3Size(header[6:10])
+	const tagThreshold = 512 * 1024 // 512 KB
+	if tagSize <= tagThreshold {
+		return 0, nil
+	}
+
+	tmpPath := fullPath + ".tmp"
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",
+		"-i", fullPath,
+		"-map_metadata", "-1",
+		"-vn",
+		"-c:a", "copy",
+		tmpPath,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("ffmpeg sanitize failed: %w (output: %s)", err, string(output))
+	}
+
+	backupPath := fullPath + ".original"
+	if err := os.Rename(fullPath, backupPath); err != nil {
+		os.Remove(tmpPath)
+		return 0, fmt.Errorf("failed to backup original file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, fullPath); err != nil {
+		_ = os.Rename(backupPath, fullPath)
+		return 0, fmt.Errorf("failed to replace sanitized file: %w", err)
+	}
+	_ = os.Remove(backupPath)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to stat sanitized file: %w", err)
+	}
+
+	return info.Size(), nil
+}
+
+func parseID3Size(b []byte) int {
+	size := 0
+	for _, v := range b {
+		size = (size << 7) | int(v&0x7F)
+	}
+	return size
 }
 
 // OpenFile exposes storage Open for streaming
