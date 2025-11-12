@@ -5,6 +5,7 @@ import { usePlayer } from '../../state/player'
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const barRef = useRef<HTMLDivElement | null>(null)
+  const prevTrackIdRef = useRef<string | undefined>(undefined)
   const { queue, index, next, prev, isPlaying, toggle } = usePlayer()
   const current = queue[index]
   const [progress, setProgress] = useState(0)
@@ -50,9 +51,15 @@ export function PlayerBar() {
 
   useEffect(() => {
     if (!audioRef.current) return
-    // Handle play/pause state changes
-    if (isPlaying) audioRef.current.play().catch(() => {})
-    else audioRef.current.pause()
+    const el = audioRef.current
+    
+    // Handle play/pause state changes - preserve currentTime
+    if (isPlaying) {
+      // Resume playback from current position
+      el.play().catch(() => {})
+    } else {
+      el.pause()
+    }
   }, [isPlaying])
 
   // Handle track changes when index changes (next/prev navigation)
@@ -60,21 +67,26 @@ export function PlayerBar() {
     if (!audioRef.current || !current) return
     const el = audioRef.current
     
-    // Load the new track when current changes
-    el.load()
-    // Reset progress and duration for new track
-    setProgress(0)
-    setDuration(0)
-    
-    // Auto-play if we were playing before - wait for metadata to load
-    if (isPlaying) {
-      const onCanPlay = () => {
-        el.play().catch(() => {})
-        el.removeEventListener('canplay', onCanPlay)
+    // Only reload if the track actually changed (not just play/pause state)
+    const trackChanged = prevTrackIdRef.current !== current.id
+    if (trackChanged) {
+      // Load the new track when current changes
+      el.load()
+      // Reset progress and duration for new track
+      setProgress(0)
+      setDuration(0)
+      prevTrackIdRef.current = current.id
+      
+      // Auto-play if we were playing before - wait for metadata to load
+      if (isPlaying) {
+        const onCanPlay = () => {
+          el.play().catch(() => {})
+          el.removeEventListener('canplay', onCanPlay)
+        }
+        el.addEventListener('canplay', onCanPlay)
       }
-      el.addEventListener('canplay', onCanPlay)
     }
-  }, [current, isPlaying])
+  }, [current, isPlaying]) // Track both, but only reload on track change
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
 
