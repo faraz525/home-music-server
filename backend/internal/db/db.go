@@ -53,17 +53,34 @@ func (d *DB) migrate() error {
 		}
 	}
 
-	if allTablesExist {
-		return nil
+	// Check if FTS5 virtual table exists
+	var ftsCount int
+	_ = d.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tracks_fts'").Scan(&ftsCount)
+	ftsExists := ftsCount > 0
+
+	// Apply schema.sql if any tables are missing or FTS5 table is missing
+	if !allTablesExist || !ftsExists {
+		b, err := migrationsFS.ReadFile("migrations/schema.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read schema: %w", err)
+		}
+		if _, err := d.Exec(string(b)); err != nil {
+			return fmt.Errorf("failed to execute schema: %w", err)
+		}
+
+		// If FTS5 table was just created but tracks exist, rebuild the index
+		if !ftsExists && allTablesExist {
+			var trackCount int
+			_ = d.QueryRow("SELECT COUNT(*) FROM tracks").Scan(&trackCount)
+			if trackCount > 0 {
+				// Rebuild FTS5 index with existing tracks
+				_, _ = d.Exec(`
+					INSERT INTO tracks_fts(track_id, title, artist, album, genre, original_filename)
+					SELECT id, title, artist, album, genre, original_filename FROM tracks
+				`)
+			}
+		}
 	}
 
-	// Apply schema.sql if any tables are missing
-	b, err := migrationsFS.ReadFile("migrations/schema.sql")
-	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-	if _, err := d.Exec(string(b)); err != nil {
-		return fmt.Errorf("failed to execute schema: %w", err)
-	}
 	return nil
 }
