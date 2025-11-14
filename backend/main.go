@@ -3,28 +3,31 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/faraz525/home-music-server/backend/auth"
+	"github.com/faraz525/home-music-server/backend/internal/config"
+	idb "github.com/faraz525/home-music-server/backend/internal/db"
+	mlocal "github.com/faraz525/home-music-server/backend/internal/media/metadata/local"
+	slocal "github.com/faraz525/home-music-server/backend/internal/storage/local"
+	"github.com/faraz525/home-music-server/backend/playlists"
+	"github.com/faraz525/home-music-server/backend/server"
 	"github.com/faraz525/home-music-server/backend/tracks"
-	"github.com/faraz525/home-music-server/backend/utils"
 )
 
 func main() {
 	// Enhanced startup logging
 	fmt.Printf("[CrateDrop] Starting CrateDrop server at %s...\n", time.Now().Format("2006-01-02 15:04:05"))
 
-	// Initialize database
-	dataDir := os.Getenv("DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/mnt/music/cratedrop"
-	}
-	fmt.Printf("[CrateDrop] Using data directory: %s\n", dataDir)
+	// Load config
+	cfg := config.FromEnv()
+	fmt.Printf("[CrateDrop] Using data directory: %s\n", cfg.DataDir)
 
-	db, err := utils.NewDB(dataDir)
+	// Initialize database
+	dbPath := filepath.Join(cfg.DataDir, "db", "cratedrop.sqlite")
+	fmt.Printf("[CrateDrop] Database path: %s\n", dbPath)
+	db, err := idb.New(cfg.DataDir)
 	if err != nil {
 		log.Fatalf("[CrateDrop] Failed to initialize database: %v", err)
 	}
@@ -34,101 +37,33 @@ func main() {
 	// Initialize repositories
 	authRepo := auth.NewRepository(db)
 	tracksRepo := tracks.NewRepository(db)
+	playlistsRepo := playlists.NewRepository(db)
 	fmt.Printf("[CrateDrop] Repositories initialized\n")
 
-	// Initialize managers
+	// Initialize managers and infra
 	authManager, err := auth.NewManager(authRepo)
 	if err != nil {
 		log.Fatalf("[CrateDrop] Failed to initialize auth manager: %v", err)
 	}
 	fmt.Printf("[CrateDrop] Auth manager initialized\n")
 
-	tracksManager := tracks.NewManager(tracksRepo)
-	fmt.Printf("[CrateDrop] Tracks manager initialized\n")
+	storage := slocal.New(cfg.DataDir)
+	extractor := mlocal.New()
+	tracksManager := tracks.NewManager(tracksRepo, storage, extractor)
+	playlistsManager := playlists.NewManager(playlistsRepo)
+	fmt.Printf("[CrateDrop] Tracks and playlists managers initialized\n")
 
-	// Initialize Gin router with custom logging
-	r := gin.New()
+	// Initialize router and API group
+	r, api := server.NewRouter()
 
-	// Add custom logger middleware
-	r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		return fmt.Sprintf("[CrateDrop] %s | %3d | %13v | %15s | %-7s %s\n",
-			param.TimeStamp.Format("2006/01/02 15:04:05"),
-			param.StatusCode,
-			param.Latency,
-			param.ClientIP,
-			param.Method,
-			param.Path,
-		)
-	}))
-	r.Use(gin.Recovery())
+	// Register feature-owned routes
+	auth.Routes(authManager)(api)
+	protected := api.Group("")
+	protected.Use(auth.AuthMiddleware())
+	tracks.Routes(tracksManager, playlistsManager)(protected)
+	playlists.Routes(playlistsManager)(protected)
 
-	// CORS middleware
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
-
-	// Health check endpoints
-	r.GET("/api/healthz", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "cratedrop-backend",
-			"version": "v0",
-		})
-	})
-	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "cratedrop-backend",
-			"version": "v0",
-		})
-	})
-
-	// Auth routes
-	api := r.Group("/api")
-	{
-		// Public auth routes
-		authGroup := api.Group("/auth")
-		{
-			authGroup.POST("/signup", auth.SignupHandler(authManager))
-			authGroup.POST("/login", auth.LoginHandler(authManager))
-			authGroup.POST("/refresh", auth.RefreshHandler(authManager))
-			authGroup.POST("/logout", auth.LogoutHandler(authManager))
-		}
-
-		// Protected routes
-		protected := api.Group("")
-		protected.Use(auth.AuthMiddleware())
-		{
-			protected.GET("/me", auth.MeHandler(authManager))
-
-			// Admin-only routes
-			adminRoutes := protected.Group("")
-			adminRoutes.Use(auth.AdminMiddleware())
-			{
-				adminRoutes.GET("/users", auth.GetUsersHandler(authManager))
-			}
-
-			// Track routes
-			trackRoutes := protected.Group("/tracks")
-			{
-				trackRoutes.POST("", tracks.UploadHandler(tracksManager))
-				trackRoutes.GET("", tracks.ListHandler(tracksManager))
-				trackRoutes.GET("/:id", tracks.GetHandler(tracksManager))
-				trackRoutes.GET("/:id/stream", tracks.StreamHandler(tracksManager))
-				trackRoutes.DELETE("/:id", tracks.DeleteHandler(tracksManager))
-			}
-		}
-	}
-
-	addr := "0.0.0.0:8080"
+	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)
 	fmt.Printf("[CrateDrop] API available at http://%s/api\n", addr)
 	fmt.Printf("[CrateDrop] Health check at http://%s/api/healthz\n", addr)

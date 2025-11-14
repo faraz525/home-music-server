@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
@@ -34,7 +34,7 @@ func getCookieDomain() string {
 }
 
 // setAuthCookies sets both access and refresh token cookies with the appropriate domain
-func setAuthCookies(c *gin.Context, tokens *models.Tokens) {
+func setAuthCookies(c *gin.Context, tokens *imodels.Tokens) {
 	domain := getCookieDomain()
 	c.SetCookie("refresh_token", tokens.RefreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", domain, false, true)
 	c.SetCookie("access_token", tokens.AccessToken, 60*15, "/", domain, false, true)
@@ -59,13 +59,13 @@ type LoginRequest struct {
 
 func SignupHandler(manager *Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req models.SignupRequest
+		var req imodels.SignupRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "invalid_request", "message": err.Error()}})
 			return
 		}
 
-		tokens, err := manager.Signup(&req)
+		tokens, err := manager.Signup(c.Request.Context(), &req)
 		if err != nil {
 			statusCode := http.StatusInternalServerError
 			errorCode := "signup_failed"
@@ -91,13 +91,13 @@ func SignupHandler(manager *Manager) gin.HandlerFunc {
 
 func LoginHandler(manager *Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req models.LoginRequest
+		var req imodels.LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "invalid_request", "message": err.Error()}})
 			return
 		}
 
-		tokens, err := manager.Login(&req)
+		tokens, err := manager.Login(c.Request.Context(), &req)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "login_failed", "message": err.Error()}})
 			return
@@ -118,7 +118,7 @@ func RefreshHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		tokens, err := manager.Refresh(refreshToken)
+		tokens, err := manager.Refresh(c.Request.Context(), refreshToken)
 		if err != nil {
 			statusCode := http.StatusUnauthorized
 			if err.Error() == "refresh token expired" {
@@ -140,7 +140,7 @@ func LogoutHandler(manager *Manager) gin.HandlerFunc {
 		// Get refresh token from cookie
 		refreshToken, err := c.Cookie("refresh_token")
 		if err == nil {
-			manager.Logout(refreshToken)
+			manager.Logout(c.Request.Context(), refreshToken)
 		}
 
 		// Clear both cookies
@@ -163,7 +163,7 @@ func MeHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 		userID, _ := c.Get("user_id")
-		user, err := manager.GetCurrentUser(userID.(string))
+		user, err := manager.GetCurrentUser(c.Request.Context(), userID.(string))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to get user"}})
 			return
@@ -188,7 +188,7 @@ func GetUsersHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		users, err := manager.GetUsers()
+		users, err := manager.GetUsers(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to fetch users"}})
 			return

@@ -1,28 +1,30 @@
 package auth
 
 import (
+	"context"
 	"time"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	"github.com/faraz525/home-music-server/backend/internal/db"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
-// Repository handles authentication data operations
+// Data handles authentication data operations
 type Repository struct {
-	db *utils.DB
+	db *db.DB
 }
 
-// NewRepository creates a new auth repository
-func NewRepository(db *utils.DB) *Repository {
+// NewRepository creates a new auth data
+func NewRepository(db *db.DB) *Repository {
 	return &Repository{db: db}
 }
 
 // CreateUser creates a new user in the database
-func (r *Repository) CreateUser(email, passwordHash, role string) (*models.User, error) {
+func (r *Repository) CreateUser(ctx context.Context, email, passwordHash, role string) (*imodels.User, error) {
 	id := utils.GenerateUserID()
 	now := time.Now()
 
-	_, err := r.db.Exec(
+	_, err := r.db.ExecContext(ctx,
 		"INSERT INTO users (id, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 		id, email, passwordHash, role, now, now,
 	)
@@ -30,7 +32,7 @@ func (r *Repository) CreateUser(email, passwordHash, role string) (*models.User,
 		return nil, err
 	}
 
-	return &models.User{
+	return &imodels.User{
 		ID:           id,
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -41,9 +43,9 @@ func (r *Repository) CreateUser(email, passwordHash, role string) (*models.User,
 }
 
 // AdminExists checks if an admin user already exists
-func (r *Repository) AdminExists() (bool, error) {
+func (r *Repository) AdminExists(ctx context.Context) (bool, error) {
 	var count int
-	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -51,9 +53,9 @@ func (r *Repository) AdminExists() (bool, error) {
 }
 
 // GetUserByEmail retrieves a user by email
-func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
-	var user models.User
-	err := r.db.QueryRow(
+func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*imodels.User, error) {
+	var user imodels.User
+	err := r.db.QueryRowContext(ctx,
 		"SELECT id, email, password_hash, role, created_at, updated_at FROM users WHERE email = ?",
 		email,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
@@ -64,9 +66,9 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 }
 
 // GetUserByID retrieves a user by ID
-func (r *Repository) GetUserByID(id string) (*models.User, error) {
-	var user models.User
-	err := r.db.QueryRow(
+func (r *Repository) GetUserByID(ctx context.Context, id string) (*imodels.User, error) {
+	var user imodels.User
+	err := r.db.QueryRowContext(ctx,
 		"SELECT id, email, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
 		id,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt)
@@ -77,11 +79,11 @@ func (r *Repository) GetUserByID(id string) (*models.User, error) {
 }
 
 // CreateRefreshToken creates a new refresh token
-func (r *Repository) CreateRefreshToken(userID, tokenHash string, expiresAt time.Time) (*models.RefreshToken, error) {
+func (r *Repository) CreateRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) (*imodels.RefreshToken, error) {
 	id := utils.GenerateTokenID()
 	now := time.Now()
 
-	_, err := r.db.Exec(
+	_, err := r.db.ExecContext(ctx,
 		"INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
 		id, userID, tokenHash, expiresAt, now,
 	)
@@ -89,7 +91,7 @@ func (r *Repository) CreateRefreshToken(userID, tokenHash string, expiresAt time
 		return nil, err
 	}
 
-	return &models.RefreshToken{
+	return &imodels.RefreshToken{
 		ID:        id,
 		UserID:    userID,
 		TokenHash: tokenHash,
@@ -99,9 +101,9 @@ func (r *Repository) CreateRefreshToken(userID, tokenHash string, expiresAt time
 }
 
 // GetRefreshTokenByHash retrieves a refresh token by its hash
-func (r *Repository) GetRefreshTokenByHash(tokenHash string) (*models.RefreshToken, error) {
-	var token models.RefreshToken
-	err := r.db.QueryRow(
+func (r *Repository) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (*imodels.RefreshToken, error) {
+	var token imodels.RefreshToken
+	err := r.db.QueryRowContext(ctx,
 		"SELECT id, user_id, token_hash, expires_at, revoked_at, created_at FROM refresh_tokens WHERE token_hash = ?",
 		tokenHash,
 	).Scan(&token.ID, &token.UserID, &token.TokenHash, &token.ExpiresAt, &token.RevokedAt, &token.CreatedAt)
@@ -112,23 +114,23 @@ func (r *Repository) GetRefreshTokenByHash(tokenHash string) (*models.RefreshTok
 }
 
 // RevokeRefreshToken revokes a refresh token
-func (r *Repository) RevokeRefreshToken(tokenID string) error {
+func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenID string) error {
 	now := time.Now()
-	_, err := r.db.Exec("UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?", now, tokenID)
+	_, err := r.db.ExecContext(ctx, "UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?", now, tokenID)
 	return err
 }
 
 // GetUsers retrieves all users (admin only)
-func (r *Repository) GetUsers() ([]*models.User, error) {
-	rows, err := r.db.Query("SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC")
+func (r *Repository) GetUsers(ctx context.Context) ([]*imodels.User, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var users []*models.User
+	var users []*imodels.User
 	for rows.Next() {
-		var user models.User
+		var user imodels.User
 		err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err

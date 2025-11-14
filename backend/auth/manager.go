@@ -1,22 +1,29 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/faraz525/home-music-server/backend/models"
+	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/utils"
 	"github.com/gin-gonic/gin"
 )
 
+// PlaylistCreator interface for creating default playlists
+type PlaylistCreator interface {
+	EnsureDefaultPlaylist(userID string) (*imodels.Playlist, error)
+}
+
 // Manager handles authentication business logic and API management
 type Manager struct {
-	repo          *Repository
-	jwtSecret     string
-	refreshSecret string
+	repo            *Repository
+	jwtSecret       string
+	refreshSecret   string
+	playlistCreator PlaylistCreator
 }
 
 // NewManager creates a new auth manager
@@ -38,13 +45,18 @@ func NewManager(repo *Repository) (*Manager, error) {
 	}, nil
 }
 
+// SetPlaylistCreator sets the playlist creator for creating default playlists
+func (m *Manager) SetPlaylistCreator(creator PlaylistCreator) {
+	m.playlistCreator = creator
+}
+
 // Signup handles user registration
-func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
+func (m *Manager) Signup(ctx context.Context, req *imodels.SignupRequest) (*imodels.Tokens, error) {
 	// Normalize email
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	// Check if user already exists
-	existingUser, err := m.repo.GetUserByEmail(req.Email)
+	existingUser, err := m.repo.GetUserByEmail(ctx, req.Email)
 	if err == nil && existingUser != nil {
 		return nil, errors.New("user with this email already exists")
 	}
@@ -55,7 +67,7 @@ func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
 
 	if req.Email == adminEmail {
 		// Check if admin already exists
-		adminExists, err := m.repo.AdminExists()
+		adminExists, err := m.repo.AdminExists(ctx)
 		if err != nil {
 			return nil, errors.New("failed to check admin status")
 		}
@@ -72,9 +84,18 @@ func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
 	}
 
 	// Create user
-	user, err := m.repo.CreateUser(req.Email, hashedPassword, role)
+	user, err := m.repo.CreateUser(ctx, req.Email, hashedPassword, role)
 	if err != nil {
 		return nil, errors.New("failed to create user")
+	}
+
+	// Create default playlist for new user
+	if m.playlistCreator != nil {
+		_, err = m.playlistCreator.EnsureDefaultPlaylist(user.ID)
+		if err != nil {
+			fmt.Printf("[WARNING] Failed to create default playlist for user %s: %v\n", user.ID, err)
+			// Don't fail signup if playlist creation fails
+		}
 	}
 
 	// Generate tokens
@@ -86,7 +107,7 @@ func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
 	// Store refresh token hash
 	refreshTokenHash := utils.HashRefreshToken(tokens.RefreshToken)
 	expiresAt := time.Now().Add(utils.RefreshTokenDuration)
-	_, err = m.repo.CreateRefreshToken(user.ID, refreshTokenHash, expiresAt)
+	_, err = m.repo.CreateRefreshToken(ctx, user.ID, refreshTokenHash, expiresAt)
 	if err != nil {
 		return nil, errors.New("failed to store refresh token")
 	}
@@ -95,12 +116,12 @@ func (m *Manager) Signup(req *models.SignupRequest) (*models.Tokens, error) {
 }
 
 // Login handles user authentication
-func (m *Manager) Login(req *models.LoginRequest) (*models.Tokens, error) {
+func (m *Manager) Login(ctx context.Context, req *imodels.LoginRequest) (*imodels.Tokens, error) {
 	// Normalize email
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	// Get user
-	user, err := m.repo.GetUserByEmail(req.Email)
+	user, err := m.repo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
@@ -119,7 +140,7 @@ func (m *Manager) Login(req *models.LoginRequest) (*models.Tokens, error) {
 	// Store refresh token hash
 	refreshTokenHash := utils.HashRefreshToken(tokens.RefreshToken)
 	expiresAt := time.Now().Add(utils.RefreshTokenDuration)
-	_, err = m.repo.CreateRefreshToken(user.ID, refreshTokenHash, expiresAt)
+	_, err = m.repo.CreateRefreshToken(ctx, user.ID, refreshTokenHash, expiresAt)
 	if err != nil {
 		return nil, errors.New("failed to store refresh token")
 	}
@@ -128,12 +149,12 @@ func (m *Manager) Login(req *models.LoginRequest) (*models.Tokens, error) {
 }
 
 // Refresh handles token refresh
-func (m *Manager) Refresh(refreshToken string) (*models.Tokens, error) {
+func (m *Manager) Refresh(ctx context.Context, refreshToken string) (*imodels.Tokens, error) {
 	// Hash the token to look it up
 	tokenHash := utils.HashRefreshToken(refreshToken)
 
 	// Get token from database
-	storedToken, err := m.repo.GetRefreshTokenByHash(tokenHash)
+	storedToken, err := m.repo.GetRefreshTokenByHash(ctx, tokenHash)
 	if err != nil {
 		return nil, errors.New("invalid refresh token")
 	}
@@ -149,13 +170,13 @@ func (m *Manager) Refresh(refreshToken string) (*models.Tokens, error) {
 	}
 
 	// Get user
-	user, err := m.repo.GetUserByID(storedToken.UserID)
+	user, err := m.repo.GetUserByID(ctx, storedToken.UserID)
 	if err != nil {
 		return nil, errors.New("failed to get user")
 	}
 
 	// Revoke old refresh token
-	err = m.repo.RevokeRefreshToken(storedToken.ID)
+	err = m.repo.RevokeRefreshToken(ctx, storedToken.ID)
 	if err != nil {
 		return nil, errors.New("failed to revoke old token")
 	}
@@ -169,7 +190,7 @@ func (m *Manager) Refresh(refreshToken string) (*models.Tokens, error) {
 	// Store new refresh token hash
 	newTokenHash := utils.HashRefreshToken(tokens.RefreshToken)
 	expiresAt := time.Now().Add(utils.RefreshTokenDuration)
-	_, err = m.repo.CreateRefreshToken(user.ID, newTokenHash, expiresAt)
+	_, err = m.repo.CreateRefreshToken(ctx, user.ID, newTokenHash, expiresAt)
 	if err != nil {
 		return nil, errors.New("failed to store refresh token")
 	}
@@ -178,29 +199,29 @@ func (m *Manager) Refresh(refreshToken string) (*models.Tokens, error) {
 }
 
 // Logout handles user logout
-func (m *Manager) Logout(refreshToken string) error {
+func (m *Manager) Logout(ctx context.Context, refreshToken string) error {
 	if refreshToken == "" {
 		return nil // Nothing to revoke
 	}
 
 	// Hash the token and revoke it
 	tokenHash := utils.HashRefreshToken(refreshToken)
-	storedToken, err := m.repo.GetRefreshTokenByHash(tokenHash)
+	storedToken, err := m.repo.GetRefreshTokenByHash(ctx, tokenHash)
 	if err == nil {
-		return m.repo.RevokeRefreshToken(storedToken.ID)
+		return m.repo.RevokeRefreshToken(ctx, storedToken.ID)
 	}
 
 	return nil // Token not found, nothing to do
 }
 
 // GetCurrentUser retrieves the current authenticated user
-func (m *Manager) GetCurrentUser(userID string) (*models.User, error) {
-	return m.repo.GetUserByID(userID)
+func (m *Manager) GetCurrentUser(ctx context.Context, userID string) (*imodels.User, error) {
+	return m.repo.GetUserByID(ctx, userID)
 }
 
 // GetUsers retrieves all users (admin only)
-func (m *Manager) GetUsers() ([]*models.User, error) {
-	return m.repo.GetUsers()
+func (m *Manager) GetUsers(ctx context.Context) ([]*imodels.User, error) {
+	return m.repo.GetUsers(ctx)
 }
 
 // ValidateAccessToken validates an access token
@@ -306,7 +327,7 @@ func (m *Manager) GetAvailableAPIs() []string {
 }
 
 // generateTokens creates both access and refresh tokens
-func (m *Manager) generateTokens(userID, email, role string) (*models.Tokens, error) {
+func (m *Manager) generateTokens(userID, email, role string) (*imodels.Tokens, error) {
 	// Generate access token
 	accessToken, err := utils.GenerateAccessToken(userID, email, role)
 	if err != nil {
@@ -319,7 +340,7 @@ func (m *Manager) generateTokens(userID, email, role string) (*models.Tokens, er
 		return nil, err
 	}
 
-	return &models.Tokens{
+	return &imodels.Tokens{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User: map[string]interface{}{

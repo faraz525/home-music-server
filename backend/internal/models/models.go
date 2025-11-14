@@ -1,10 +1,7 @@
 package models
 
-import (
-	"time"
-)
+import "time"
 
-// User represents a user account
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
@@ -14,7 +11,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// Track represents an uploaded music track
 type Track struct {
 	ID               string    `json:"id"`
 	OwnerUserID      string    `json:"owner_user_id"`
@@ -34,7 +30,6 @@ type Track struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// RefreshToken represents a refresh token for session management
 type RefreshToken struct {
 	ID        string     `json:"-"`
 	UserID    string     `json:"-"`
@@ -44,19 +39,16 @@ type RefreshToken struct {
 	CreatedAt time.Time  `json:"-"`
 }
 
-// SignupRequest represents a signup request
 type SignupRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-// LoginRequest represents a login request
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-// UploadTrackRequest represents a track upload request
 type UploadTrackRequest struct {
 	Title      string `form:"title"`
 	Artist     string `form:"artist"`
@@ -67,31 +59,88 @@ type UploadTrackRequest struct {
 	Bitrate    int    `form:"bitrate"`
 }
 
-// Tokens represents the response containing access and refresh tokens
 type Tokens struct {
 	AccessToken  string                 `json:"access_token"`
 	RefreshToken string                 `json:"refresh_token"`
 	User         map[string]interface{} `json:"user"`
 }
 
-// APIResponse represents a standard API response
 type APIResponse struct {
 	Success bool      `json:"success"`
 	Data    any       `json:"data,omitempty"`
 	Error   *APIError `json:"error,omitempty"`
 }
 
-// APIError represents an API error response
 type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-// TrackList represents a paginated list of tracks
 type TrackList struct {
 	Tracks  []*Track `json:"tracks"`
 	Total   int      `json:"total"`
 	Limit   int      `json:"limit"`
 	Offset  int      `json:"offset"`
 	HasNext bool     `json:"has_next"`
+}
+
+// Playlist represents a music playlist
+type Playlist struct {
+	ID          string    `json:"id"`
+	OwnerUserID string    `json:"owner_user_id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	IsDefault   bool      `json:"is_default"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PlaylistTrack represents the relationship between a playlist and a track
+type PlaylistTrack struct {
+	ID         string    `json:"id"`
+	PlaylistID string    `json:"playlist_id"`
+	TrackID    string    `json:"track_id"`
+	Position   int       `json:"position"`
+	AddedAt    time.Time `json:"added_at"`
+}
+
+// PlaylistList represents a paginated list of playlists
+type PlaylistList struct {
+	Playlists []*Playlist `json:"playlists"`
+	Total     int         `json:"total"`
+	Limit     int         `json:"limit"`
+	Offset    int         `json:"offset"`
+	HasNext   bool        `json:"has_next"`
+}
+
+// PlaylistWithTracks represents a playlist with its associated tracks
+type PlaylistWithTracks struct {
+	Playlist *Playlist `json:"playlist"`
+	Tracks   []*Track  `json:"tracks"`
+	Total    int       `json:"total"`
+	Limit    int       `json:"limit"`
+	Offset   int       `json:"offset"`
+	HasNext  bool      `json:"has_next"`
+}
+
+// CreatePlaylistRequest represents a request to create a playlist
+type CreatePlaylistRequest struct {
+	Name        string  `json:"name" binding:"required"`
+	Description *string `json:"description,omitempty"`
+}
+
+// UpdatePlaylistRequest represents a request to update a playlist
+type UpdatePlaylistRequest struct {
+	Name        string  `json:"name" binding:"required"`
+	Description *string `json:"description,omitempty"`
+}
+
+// AddTracksToPlaylistRequest represents a request to add tracks to a playlist
+type AddTracksToPlaylistRequest struct {
+	TrackIDs []string `json:"track_ids" binding:"required"`
+}
+
+// RemoveTracksFromPlaylistRequest represents a request to remove tracks from a playlist
+type RemoveTracksFromPlaylistRequest struct {
+	TrackIDs []string `json:"track_ids" binding:"required"`
 }

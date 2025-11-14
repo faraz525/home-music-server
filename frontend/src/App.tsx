@@ -3,7 +3,10 @@ import { Layout } from './components/layout/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { LibraryPage } from './pages/LibraryPage'
+import { CratesPage } from './pages/CratesPage'
+import { UploadPage } from './pages/UploadPage'
 import { AdminPage } from './pages/AdminPage'
+import { NotFound } from './pages/NotFound'
 import { AuthProvider, useAuth } from './state/auth'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
@@ -27,8 +30,11 @@ export default function App() {
           }
         >
           <Route index element={<LibraryPage />} />
+          <Route path="/upload" element={<UploadPage />} />
+          <Route path="/crates" element={<CratesPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthProvider>
   )
