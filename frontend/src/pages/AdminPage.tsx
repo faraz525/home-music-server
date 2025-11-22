@@ -1,23 +1,16 @@
 import axios from 'axios'
-import { FormEvent, useEffect, useState } from 'react'
-
-type Invite = {
-  code: string
-  used_by?: string | null
-  expires_at?: string | null
-}
+import { useEffect, useState } from 'react'
 
 type User = {
   id: string
   email: string
   role: string
+  storage_bytes?: number
 }
 
 export function AdminPage() {
-  const [invites, setInvites] = useState<Invite[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
-  const [expiresAt, setExpiresAt] = useState('')
 
   async function fetchData() {
     setLoading(true)
@@ -28,13 +21,10 @@ export function AdminPage() {
       // Ensure we always set an array, even if the response is malformed
       const usersData = usersRes.data?.users || usersRes.data || []
       setUsers(Array.isArray(usersData) ? usersData : [])
-      // invites endpoints not exposed in backend repo; placeholder for future
-      setInvites([])
     } catch (error) {
       console.error('Failed to fetch admin data:', error)
       // Set empty arrays on error to prevent map errors
       setUsers([])
-      setInvites([])
     } finally {
       setLoading(false)
     }
@@ -44,50 +34,49 @@ export function AdminPage() {
     fetchData()
   }, [])
 
-  async function createInvite(e: FormEvent) {
-    e.preventDefault()
-    try {
-      // Placeholder; backend invite endpoints not implemented in provided code
-      alert('Invite creation is not available in backend yet')
-    } finally {
-      // noop
-    }
+
+
+  // Helper function to format storage bytes to human-readable format
+  function formatStorage(bytes?: number): string {
+    if (!bytes || bytes === 0) return '0 B'
+    const gb = bytes / (1024 * 1024 * 1024)
+    if (gb >= 1) return `${gb.toFixed(2)} GB`
+    const mb = bytes / (1024 * 1024)
+    if (mb >= 1) return `${mb.toFixed(2)} MB`
+    const kb = bytes / 1024
+    if (kb >= 1) return `${kb.toFixed(2)} KB`
+    return `${bytes} B`
   }
 
   return (
     <div className="space-y-6">
       <div className="text-xl font-bold">Admin</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card p-4">
-          <div className="font-semibold mb-2">Users</div>
-          {loading ? (
-            <div className="text-sm text-[#A1A1A1]">Loading…</div>
-          ) : (
-            <ul className="space-y-2">
-              {Array.isArray(users) && users.map((u) => (
-                <li key={u.id} className="flex items-center justify-between text-sm">
-                  <span>{u.email}</span>
-                  <span className="text-[#A1A1A1]">{u.role}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="card p-4">
-          <div className="font-semibold mb-2">Invites</div>
-          <form className="flex flex-col sm:flex-row gap-2 mb-3" onSubmit={createInvite}>
-            <input className="input flex-1" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
-            <button className="btn btn-primary sm:w-auto w-full">Create</button>
-          </form>
-          <ul className="space-y-2">
-            {Array.isArray(invites) && invites.map((i) => (
-              <li key={i.code} className="flex items-center justify-between text-sm">
-                <span>{i.code}</span>
-                <span className="text-[#A1A1A1]">{i.used_by ? 'used' : 'unused'}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="card p-4">
+        <div className="font-semibold mb-2">Users</div>
+        {loading ? (
+          <div className="text-sm text-[#A1A1A1]">Loading…</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#2A2A2A]">
+                  <th className="text-left py-2 px-2">Email</th>
+                  <th className="text-left py-2 px-2">Role</th>
+                  <th className="text-right py-2 px-2">Storage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.isArray(users) && users.map((u) => (
+                  <tr key={u.id} className="border-b border-[#1A1A1A]">
+                    <td className="py-2 px-2">{u.email}</td>
+                    <td className="py-2 px-2 text-[#A1A1A1]">{u.role}</td>
+                    <td className="py-2 px-2 text-right text-[#A1A1A1]">{formatStorage(u.storage_bytes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

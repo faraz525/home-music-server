@@ -122,7 +122,21 @@ func (r *Repository) RevokeRefreshToken(ctx context.Context, tokenID string) err
 
 // GetUsers retrieves all users (admin only)
 func (r *Repository) GetUsers(ctx context.Context) ([]*imodels.User, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC")
+	query := `
+		SELECT 
+			u.id, 
+			u.email, 
+			u.role, 
+			u.created_at, 
+			u.updated_at,
+			COALESCE(SUM(t.size_bytes), 0) as storage_bytes
+		FROM users u
+		LEFT JOIN tracks t ON u.id = t.owner_user_id
+		GROUP BY u.id, u.email, u.role, u.created_at, u.updated_at
+		ORDER BY u.created_at DESC
+	`
+	
+	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -131,10 +145,12 @@ func (r *Repository) GetUsers(ctx context.Context) ([]*imodels.User, error) {
 	var users []*imodels.User
 	for rows.Next() {
 		var user imodels.User
-		err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+		var storageBytes int64
+		err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt, &storageBytes)
 		if err != nil {
 			return nil, err
 		}
+		user.StorageBytes = &storageBytes
 		users = append(users, &user)
 	}
 
