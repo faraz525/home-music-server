@@ -377,7 +377,7 @@ export function LibraryPage() {
                         })()
                         const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
                         const displayArtist = t.artist || 'Unknown artist'
-                        play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream` }, true)
+                        play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
                       }
                     }}
                   >

@@ -40,7 +40,7 @@ func (m *Manager) CreatePlaylist(ownerUserID string, req *imodels.CreatePlaylist
 	return playlist, nil
 }
 
-// GetUserPlaylists returns all playlists for a user
+// GetUserPlaylists returns all playlists for a user, including virtual "Unsorted" crate
 func (m *Manager) GetUserPlaylists(userID string, limit, offset int) (*imodels.PlaylistList, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -49,11 +49,23 @@ func (m *Manager) GetUserPlaylists(userID string, limit, offset int) (*imodels.P
 		offset = 0
 	}
 
-	return m.repo.GetUserPlaylists(userID, limit, offset)
+	return m.repo.GetUserPlaylistsWithVirtual(userID, limit, offset)
 }
 
 // GetPlaylist returns a specific playlist with ownership validation
 func (m *Manager) GetPlaylist(playlistID, requestingUserID string) (*imodels.Playlist, error) {
+	// Handle virtual "unsorted" playlist
+	if playlistID == "unsorted" {
+		description := "Tracks not assigned to any crate"
+		return &imodels.Playlist{
+			ID:          "unsorted",
+			OwnerUserID: requestingUserID,
+			Name:        "Unsorted",
+			Description: &description,
+			IsDefault:   true,
+		}, nil
+	}
+
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
 		return nil, err
@@ -185,6 +197,37 @@ func (m *Manager) RemoveTracksFromPlaylist(playlistID, requestingUserID string, 
 
 // GetPlaylistTracks returns tracks for a playlist with ownership validation
 func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, offset int) (*imodels.PlaylistWithTracks, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Handle virtual "unsorted" playlist
+	if playlistID == "unsorted" {
+		trackList, err := m.repo.GetTracksNotInPlaylist(requestingUserID, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+
+		description := "Tracks not assigned to any crate"
+		return &imodels.PlaylistWithTracks{
+			Playlist: &imodels.Playlist{
+				ID:          "unsorted",
+				OwnerUserID: requestingUserID,
+				Name:        "Unsorted",
+				Description: &description,
+				IsDefault:   true,
+			},
+			Tracks:  trackList.Tracks,
+			Total:   trackList.Total,
+			Limit:   trackList.Limit,
+			Offset:  trackList.Offset,
+			HasNext: trackList.HasNext,
+		}, nil
+	}
+
 	// Check playlist ownership
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
@@ -193,13 +236,6 @@ func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, 
 
 	if playlist.OwnerUserID != requestingUserID {
 		return nil, fmt.Errorf("access denied: playlist belongs to another user")
-	}
-
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
 	}
 
 	return m.repo.GetPlaylistTracks(playlistID, limit, offset)
@@ -234,4 +270,38 @@ func (m *Manager) CanAccessPlaylist(playlistID, userID string) error {
 	}
 
 	return nil
+}
+
+// SearchUnsortedTracks searches tracks not in any playlist using FTS5
+func (m *Manager) SearchUnsortedTracks(userID, query string, limit, offset int) (*imodels.TrackList, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return m.repo.SearchTracksNotInPlaylist(userID, query, limit, offset)
+}
+
+// SearchPlaylistTracks searches within a specific playlist using FTS5
+func (m *Manager) SearchPlaylistTracks(playlistID, userID, query string, limit, offset int) (*imodels.TrackList, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Check playlist ownership
+	playlist, err := m.repo.GetPlaylist(playlistID)
+	if err != nil {
+		return nil, err
+	}
+
+	if playlist.OwnerUserID != userID {
+		return nil, fmt.Errorf("access denied: playlist belongs to another user")
+	}
+
+	return m.repo.SearchPlaylistTracks(playlistID, query, limit, offset)
 }

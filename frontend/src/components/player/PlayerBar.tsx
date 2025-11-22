@@ -5,6 +5,7 @@ import { usePlayer } from '../../state/player'
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const barRef = useRef<HTMLDivElement | null>(null)
+  const prevTrackIdRef = useRef<string | undefined>(undefined)
   const { queue, index, next, prev, isPlaying, toggle } = usePlayer()
   const current = queue[index]
   const [progress, setProgress] = useState(0)
@@ -50,9 +51,15 @@ export function PlayerBar() {
 
   useEffect(() => {
     if (!audioRef.current) return
-    // Handle play/pause state changes
-    if (isPlaying) audioRef.current.play().catch(() => {})
-    else audioRef.current.pause()
+    const el = audioRef.current
+    
+    // Handle play/pause state changes - preserve currentTime
+    if (isPlaying) {
+      // Resume playback from current position
+      el.play().catch(() => {})
+    } else {
+      el.pause()
+    }
   }, [isPlaying])
 
   // Handle track changes when index changes (next/prev navigation)
@@ -60,21 +67,96 @@ export function PlayerBar() {
     if (!audioRef.current || !current) return
     const el = audioRef.current
     
-    // Load the new track when current changes
-    el.load()
-    // Reset progress and duration for new track
-    setProgress(0)
-    setDuration(0)
-    
-    // Auto-play if we were playing before - wait for metadata to load
-    if (isPlaying) {
-      const onCanPlay = () => {
-        el.play().catch(() => {})
-        el.removeEventListener('canplay', onCanPlay)
+    // Only reload if the track actually changed (not just play/pause state)
+    const trackChanged = prevTrackIdRef.current !== current.id
+    if (trackChanged) {
+      // Set duration immediately from database if available (bypasses browser metadata wait)
+      if (current.durationSeconds && current.durationSeconds > 0) {
+        // Use Object.defineProperty to set duration before browser reads it
+        Object.defineProperty(el, 'duration', {
+          value: current.durationSeconds,
+          writable: true,
+          configurable: true
+        })
+        setDuration(current.durationSeconds)
       }
-      el.addEventListener('canplay', onCanPlay)
+      
+      // Load the new track when current changes
+      el.load()
+      // Reset progress for new track
+      setProgress(0)
+      prevTrackIdRef.current = current.id
+      
+      // Auto-play if we were playing before - AGGRESSIVE playback strategy
+      if (isPlaying) {
+        let playbackStarted = false
+        const tryPlay = () => {
+          if (playbackStarted) return
+          // Check if we have ANY data (HAVE_CURRENT_DATA = 2)
+          if (el.readyState >= 2) {
+            el.play().catch(() => {})
+            playbackStarted = true
+            return true
+          }
+          return false
+        }
+        
+        // Immediate check
+        if (tryPlay()) return
+        
+        // Aggressive polling - check readyState every 50ms
+        const pollInterval = setInterval(() => {
+          if (tryPlay()) {
+            clearInterval(pollInterval)
+          }
+        }, 50)
+        
+        // Event-based triggers (backup)
+        const onLoadedData = () => {
+          if (tryPlay()) {
+            clearInterval(pollInterval)
+            el.removeEventListener('loadeddata', onLoadedData)
+            el.removeEventListener('canplay', onCanPlay)
+            el.removeEventListener('loadedmetadata', onLoadedMetadata)
+          }
+        }
+        
+        const onLoadedMetadata = () => {
+          // Browser found metadata, set duration if not already set
+          if (!current.durationSeconds && isFinite(el.duration)) {
+            setDuration(el.duration)
+          }
+          if (tryPlay()) {
+            clearInterval(pollInterval)
+            el.removeEventListener('loadeddata', onLoadedData)
+            el.removeEventListener('canplay', onCanPlay)
+            el.removeEventListener('loadedmetadata', onLoadedMetadata)
+          }
+        }
+        
+        const onCanPlay = () => {
+          if (tryPlay()) {
+            clearInterval(pollInterval)
+            el.removeEventListener('loadeddata', onLoadedData)
+            el.removeEventListener('canplay', onCanPlay)
+            el.removeEventListener('loadedmetadata', onLoadedMetadata)
+          }
+        }
+        
+        el.addEventListener('loadeddata', onLoadedData)
+        el.addEventListener('loadedmetadata', onLoadedMetadata)
+        el.addEventListener('canplay', onCanPlay)
+        
+        // Cleanup after 10 seconds (should have started by then)
+        setTimeout(() => {
+          clearInterval(pollInterval)
+          el.removeEventListener('loadeddata', onLoadedData)
+          el.removeEventListener('canplay', onCanPlay)
+          el.removeEventListener('loadedmetadata', onLoadedMetadata)
+        }, 10000)
+      }
     }
-  }, [current, isPlaying])
+  }, [current, isPlaying]) // Track both, but only reload on track change
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
 
@@ -170,7 +252,12 @@ export function PlayerBar() {
           <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12">{formatTime(duration)}</div>
         </div>
 
-        <audio ref={audioRef} src={current?.streamUrl} preload="metadata" crossOrigin="use-credentials" />
+        <audio 
+          ref={audioRef} 
+          src={current?.streamUrl} 
+          preload="metadata"
+          crossOrigin="use-credentials"
+        />
       </div>
     </div>
   )
