@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,24 @@ import (
 
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 )
+
+// ... (existing code)
+
+// SanitizeAllHandler triggers retroactive sanitization for all tracks
+func SanitizeAllHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Run in background as it might take time
+		go func() {
+			if err := manager.SanitizeExistingTracks(context.Background()); err != nil {
+				fmt.Printf("[CrateDrop] Background sanitization failed: %v\n", err)
+			}
+		}()
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Sanitization started in background. Check logs for progress.",
+		})
+	}
+}
 
 type UploadRequest struct {
 	Title  string `form:"title"`
@@ -270,6 +289,7 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "Track deleted successfully"})
 	}
 }
+
 
 // handleRangeRequest handles HTTP range requests for audio streaming
 func handleRangeRequest(c *gin.Context, file io.ReadSeeker, fileSize int64, contentType, rangeHeader string) {

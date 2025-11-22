@@ -1,6 +1,7 @@
 package tracks
 
 import (
+	"github.com/faraz525/home-music-server/backend/auth" // Added import for auth
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/gin-gonic/gin"
 )
@@ -14,5 +15,16 @@ func Routes(m *Manager, pm *playlists.Manager) func(*gin.RouterGroup) {
 		g.GET("/:id", GetHandler(m))
 		g.GET("/:id/stream", StreamHandler(m))
 		g.DELETE("/:id", DeleteHandler(m))
+
+	// Admin routes
+	admin := g.Group("/admin")
+	admin.Use(auth.AdminMiddleware())
+	{
+		admin.GET("", func(c *gin.Context) {
+			// TODO: Admin dashboard stats
+			c.JSON(200, gin.H{"message": "Admin access granted"})
+		})
+		admin.POST("/sanitize", SanitizeAllHandler(m))
 	}
+}
 }

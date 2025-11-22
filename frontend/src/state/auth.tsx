@@ -2,9 +2,17 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import axios from 'axios'
 
 function getCookie(name: string) {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'))
-  return match ? decodeURIComponent(match[1]) : ''
+  try {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, '\\$1') + '=([^;]*)'))
+    const val = match ? decodeURIComponent(match[1]) : ''
+    console.log(`[Auth] getCookie ${name}:`, val ? 'found' : 'empty')
+    return val
+  } catch (e) {
+    console.error('[Auth] getCookie error:', e)
+    return ''
+  }
 }
+
 function setCookie(name: string, value: string, maxAgeSeconds: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}`
 }
@@ -30,22 +38,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [ready, setReady] = useState(false)
 
+  console.log('[Auth] Provider render. Ready:', ready, 'User:', user?.id)
+
   const client = useMemo(() => {
     const instance = axios.create({ withCredentials: true })
     instance.interceptors.request.use((config) => {
       const token = getCookie('access_token')
-      if (token) config.headers.Authorization = `Bearer ${token}`
+      if (token && token.trim() !== '') {
+        config.headers.Authorization = `Bearer ${token}`
+      } else {
+        console.warn('[Auth] No token found for request')
+      }
       return config
     })
     instance.interceptors.response.use(
       (res) => res,
       async (error) => {
         if (error.response?.status === 401) {
+          console.log('[Auth] 401 detected, trying refresh')
           try {
             const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
-            if (data?.access_token) setCookie('access_token', data.access_token, 60 * 15)
-            return instance.request(error.config)
+            if (data?.access_token) {
+              console.log('[Auth] Refresh successful')
+              setCookie('access_token', data.access_token, 60 * 15)
+              return instance.request(error.config)
+            }
           } catch (e) {
+            console.error('[Auth] Refresh failed:', e)
             setUser(null)
           }
         }
@@ -56,12 +75,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const fetchMe = useCallback(async () => {
+    console.log('[Auth] fetchMe started')
     try {
       const { data } = await client.get('/api/me')
+      console.log('[Auth] fetchMe success:', data?.user?.id)
       setUser(data?.user || null)
-    } catch (_) {
+    } catch (e) {
+      console.error('[Auth] fetchMe failed:', e)
       setUser(null)
     } finally {
+      console.log('[Auth] fetchMe finally, setting ready=true')
       setReady(true)
     }
   }, [client])
@@ -104,4 +127,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
-

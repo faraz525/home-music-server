@@ -85,8 +85,8 @@ export function Layout() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 bg-[#181818] border-b border-[#2A2A2A] px-4 py-3 flex items-center justify-between z-40">
         <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
-        <button 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="btn p-2"
           aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileMenuOpen}
@@ -107,8 +107,7 @@ export function Layout() {
             to="/"
             end
             className={({ isActive }) =>
-              `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+              `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
               }`
             }
           >
@@ -119,26 +118,26 @@ export function Layout() {
           {user?.role === 'admin' && (
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
           )}
-            <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
-            <div className="space-y-1">
-              {crates.crates.map((p) => (
-                <Link
-                  key={p.id}
-                  to={`/?crate=${p.id}`}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
-                  onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
-                  onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
-                  onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
-                >
-                  <span className="text-[#1DB954]"><Folder size={16} /></span>
-                  <span className="truncate">{p.name}</span>
-                </Link>
-              ))}
-              <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-                <span className="text-[#1DB954]"><Plus size={16} /></span>
-                Manage Crates
+          <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
+          <div className="space-y-1">
+            {crates.crates.map((p) => (
+              <Link
+                key={p.id}
+                to={`/?crate=${p.id}`}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
+                onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
+                onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
+              >
+                <span className="text-[#1DB954]"><Folder size={16} /></span>
+                <span className="truncate">{p.name}</span>
               </Link>
-            </div>
+            ))}
+            <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
+              <span className="text-[#1DB954]"><Plus size={16} /></span>
+              Manage Crates
+            </Link>
+          </div>
         </nav>
         <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
         <div className="flex items-center justify-between mt-1">
@@ -160,8 +159,7 @@ export function Layout() {
               to="/"
               end
               className={({ isActive }) =>
-                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
                 }`
               }
             >
@@ -192,7 +190,7 @@ export function Layout() {
                 Manage Crates
               </Link>
             </div>
-        </nav>
+          </nav>
           <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
           <div className="flex items-center justify-between mt-1">
             <div className="text-sm">{user?.email}</div>
@@ -210,19 +208,19 @@ export function Layout() {
       {(
         <>
           <div
-            className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 lg:hidden ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-            onClick={() => setMobileOpen(false)}
+            className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 lg:hidden ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+            onClick={() => setMobileMenuOpen(false)}
           />
           <div
-            className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#181818] border-r border-[#2A2A2A] p-4 transform transition-transform duration-200 lg:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#181818] border-r border-[#2A2A2A] p-4 transform transition-transform duration-200 lg:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
-              <button className="btn" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+              <button className="btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
                 <X size={18} />
               </button>
             </div>
-            <SidebarContent user={user} logout={logout} onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent user={user} logout={logout} onNavigate={() => setMobileMenuOpen(false)} />
           </div>
         </>
       )}
@@ -265,8 +263,7 @@ function NavItem({ to, label, icon, onClick }: { to: string; label: string; icon
       to={to}
       end
       className={({ isActive }) =>
-        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-          isActive ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
         }`
       }
       onClick={onClick}
