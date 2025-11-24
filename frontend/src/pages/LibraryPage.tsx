@@ -3,7 +3,7 @@ import type { UnsortedParams } from '../lib/api'
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
-import { MoreHorizontal, ListPlus, Play, Pause, Music } from 'lucide-react'
+import { MoreHorizontal, ListPlus, Play, Pause, Music, Download } from 'lucide-react'
 import type { CrateList, TrackList } from '../types/crates'
 
 export function LibraryPage() {
@@ -208,7 +208,7 @@ export function LibraryPage() {
     setLastClickedIndex(index)
   }
 
-  function clearSelection() { 
+  function clearSelection() {
     setSelectedTrackIds(new Set())
     setLastClickedIndex(null)
   }
@@ -229,10 +229,10 @@ export function LibraryPage() {
       return
     }
 
-    const tracksToDrag = selectedTrackIds.has(trackId) 
-      ? Array.from(selectedTrackIds) 
+    const tracksToDrag = selectedTrackIds.has(trackId)
+      ? Array.from(selectedTrackIds)
       : [trackId]
-    
+
     setDraggingTrackIds(new Set(tracksToDrag))
     e.dataTransfer.effectAllowed = 'copy'
     e.dataTransfer.setData('application/json', JSON.stringify({ trackIds: tracksToDrag }))
@@ -346,8 +346,8 @@ export function LibraryPage() {
           const isSelected = selectedTrackIds.has(t.id)
           const isDragging = draggingTrackIds.has(t.id)
           return (
-            <div 
-              key={t.id} 
+            <div
+              key={t.id}
               className={`px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px] cursor-move transition-opacity ${isSelected ? 'bg-[#2A2A2A]' : ''} ${isDragging ? 'opacity-50' : ''}`}
               draggable
               onDragStart={(e) => handleDragStart(e, t.id)}
@@ -360,7 +360,7 @@ export function LibraryPage() {
                   e.stopPropagation()
                   toggleSelected(t.id, e.shiftKey, idx)
                 }}
-                onChange={() => {}} // Controlled input
+                onChange={() => { }} // Controlled input
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -436,6 +436,17 @@ export function LibraryPage() {
                         </button>
                       </>
                     )}
+                    <div className="border-t border-[#2A2A2A] my-1"></div>
+                    <button
+                      onClick={() => {
+                        tracksApi.download(t.id, t.original_filename)
+                        setTrackMenuOpen(null)
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
                     <div className="border-t border-[#2A2A2A] my-1"></div>
                     <button
                       onClick={() => {

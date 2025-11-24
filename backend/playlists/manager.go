@@ -305,3 +305,41 @@ func (m *Manager) SearchPlaylistTracks(playlistID, userID, query string, limit, 
 
 	return m.repo.SearchPlaylistTracks(playlistID, query, limit, offset)
 }
+
+// GetPublicPlaylists returns all public playlists with pagination
+func (m *Manager) GetPublicPlaylists(limit, offset int) ([]*imodels.PlaylistWithOwner, int, bool, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	playlists, total, err := m.repo.GetPublicPlaylists(limit, offset)
+	if err != nil {
+		return nil, 0, false, err
+	}
+
+	hasNext := offset+limit < total
+	return playlists, total, hasNext, nil
+}
+
+// UpdatePlaylistVisibility updates the visibility of a playlist with ownership validation
+func (m *Manager) UpdatePlaylistVisibility(playlistID, requestingUserID string, isPublic bool) error {
+	// Check playlist ownership
+	playlist, err := m.repo.GetPlaylist(playlistID)
+	if err != nil {
+		return err
+	}
+
+	if playlist.OwnerUserID != requestingUserID {
+		return fmt.Errorf("access denied: playlist belongs to another user")
+	}
+
+	// Validate: Unsorted playlists cannot be made public
+	if playlist.IsDefault && isPublic {
+		return fmt.Errorf("unsorted crates cannot be made public")
+	}
+
+	return m.repo.UpdatePlaylistVisibility(playlistID, isPublic)
+}

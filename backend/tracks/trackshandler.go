@@ -255,10 +255,44 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 		c.Header("Cache-Control", "public, max-age=3600, must-revalidate")
 		c.Status(http.StatusPartialContent)
 
-		streamStart := time.Now()
 		io.CopyN(c.Writer, file, chunkSize)
-		fmt.Printf("[StreamProfiler] io.CopyN took: %v\n", time.Since(streamStart))
 		fmt.Printf("[StreamProfiler] Total request time: %v\n", time.Since(startTime))
+	}
+}
+
+// DownloadHandler handles file downloads
+func DownloadHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		trackID := c.Param("id")
+		userID, _ := c.Get("user_id")
+		userRole, _ := c.Get("user_role")
+
+		track, err := manager.GetTrack(c.Request.Context(), trackID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
+			return
+		}
+
+		// Check ownership
+		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "Access denied"}})
+			return
+		}
+
+		// Open file via manager/storage
+		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
+			return
+		}
+		defer file.Close()
+
+		// Set headers for download
+		c.Header("Content-Type", track.ContentType)
+		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", track.OriginalFilename))
+
+		io.Copy(c.Writer, file)
 	}
 }
 

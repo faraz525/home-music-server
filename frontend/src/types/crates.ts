@@ -1,12 +1,16 @@
-// Crate types for TypeScript
 export type Crate = {
   id: string
   owner_user_id: string
   name: string
   description?: string
   is_default: boolean
+  is_public: boolean
   created_at: string
   updated_at: string
+}
+
+export type PlaylistWithOwner = Crate & {
+  owner_email: string
 }
 
 export type CrateWithTracks = {

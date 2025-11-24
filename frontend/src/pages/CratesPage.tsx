@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Edit, Trash2, Music, MoreHorizontal } from 'lucide-react'
+import { Plus, Edit, Trash2, Music, MoreHorizontal, Globe, Lock } from 'lucide-react'
 import { cratesApi } from '../lib/api'
 import { Crate, CrateList, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
 
@@ -9,8 +9,8 @@ export function CratesPage() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingCrate, setEditingCrate] = useState<Crate | null>(null)
-  const [createForm, setCreateForm] = useState<CreateCrateRequest>({ name: '', description: '' })
-  const [updateForm, setUpdateForm] = useState<UpdateCrateRequest>({ name: '', description: '' })
+  const [createForm, setCreateForm] = useState<CreateCrateRequest>({ name: '', description: '', is_public: true })
+  const [updateForm, setUpdateForm] = useState<UpdateCrateRequest>({ name: '', description: '', is_public: true })
   const [searchParams, setSearchParams] = useSearchParams()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
@@ -56,7 +56,7 @@ export function CratesPage() {
 
     try {
       await cratesApi.create(createForm)
-      setCreateForm({ name: '', description: '' })
+      setCreateForm({ name: '', description: '', is_public: true })
       setShowCreateModal(false)
       window.dispatchEvent(new CustomEvent('crates:updated'))
       const next = new URLSearchParams(searchParams)
@@ -75,7 +75,7 @@ export function CratesPage() {
     try {
       await cratesApi.update(editingCrate.id, updateForm)
       setEditingCrate(null)
-      setUpdateForm({ name: '', description: '' })
+      setUpdateForm({ name: '', description: '', is_public: true })
       window.dispatchEvent(new CustomEvent('crates:updated'))
       await fetchCrates()
     } catch (error) {
@@ -101,7 +101,8 @@ export function CratesPage() {
     setEditingCrate(crate)
     setUpdateForm({
       name: crate.name,
-      description: crate.description || ''
+      description: crate.description || '',
+      is_public: crate.is_public
     })
   }
 
@@ -165,9 +166,9 @@ export function CratesPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.isArray(crates.crates) && crates.crates.filter(c => c.id !== 'unsorted').map((crate) => (
-          <div 
-            key={crate.id} 
-            className={`card p-4 group transition-all ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+          <div
+            key={crate.id}
+            className={`card p-4 group transition-all relative ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
             onDragOver={(e) => handleDragOver(e, crate.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, crate.id)}
@@ -190,9 +191,17 @@ export function CratesPage() {
                 </div>
               </div>
 
+              <div className="absolute top-4 right-12">
+                {crate.is_public ? (
+                  <Globe size={16} className="text-[#A1A1A1]" />
+                ) : (
+                  <Lock size={16} className="text-[#A1A1A1]" />
+                )}
+              </div>
+
               {!crate.is_default && (
                 <div className="relative">
-                  <button 
+                  <button
                     className="p-1 hover:bg-[#2A2A2A] rounded"
                     onClick={() => setMenuOpen(menuOpen === crate.id ? null : crate.id)}
                   >
@@ -234,119 +243,153 @@ export function CratesPage() {
         ))}
       </div>
 
-      {(!Array.isArray(crates.crates) || crates.crates.filter(c => c.id !== 'unsorted').length === 0) && (
-        <div className="text-center py-12">
-          <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No crates yet</h3>
-          <p className="text-[#A1A1A1] mb-4">Create your first crate to start organizing your music</p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn btn-primary"
-          >
-            Create Your First Crate
-          </button>
-        </div>
-      )}
+      {
+        (!Array.isArray(crates.crates) || crates.crates.filter(c => c.id !== 'unsorted').length === 0) && (
+          <div className="text-center py-12">
+            <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No crates yet</h3>
+            <p className="text-[#A1A1A1] mb-4">Create your first crate to start organizing your music</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="btn btn-primary"
+            >
+              Create Your First Crate
+            </button>
+          </div>
+        )
+      }
 
       {/* Create Crate Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1A1A1A] rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Create New Crate</h2>
+      {
+        showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-[#1A1A1A] rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Create New Crate</h2>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name *</label>
-                <input
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  className="input w-full"
-                  placeholder="My Awesome Playlist"
-                  required
-                />
-              </div>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                    className="input w-full"
+                    placeholder="My Awesome Playlist"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  className="input w-full h-24 resize-none"
-                  placeholder="Optional description..."
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                    className="input w-full h-24 resize-none"
+                    placeholder="Optional description..."
+                  />
+                </div>
 
-              <div className="flex gap-3 pt-2">
-                <button type="submit" className="btn btn-primary flex-1">
-                  Create Crate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false)
-                    setCreateForm({ name: '', description: '' })
-                    const next = new URLSearchParams(searchParams)
-                    next.delete('create')
-                    setSearchParams(next, { replace: true })
-                  }}
-                  className="btn flex-1"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="create-public"
+                    checked={createForm.is_public}
+                    onChange={(e) => setCreateForm({ ...createForm, is_public: e.target.checked })}
+                    className="rounded bg-[#2A2A2A] border-none text-[#1DB954] focus:ring-[#1DB954]"
+                  />
+                  <label htmlFor="create-public" className="text-sm font-medium cursor-pointer select-none flex items-center gap-2">
+                    {createForm.is_public ? <Globe size={14} /> : <Lock size={14} />}
+                    {createForm.is_public ? 'Public Crate' : 'Private Crate'}
+                  </label>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="submit" className="btn btn-primary flex-1">
+                    Create Crate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setCreateForm({ name: '', description: '', is_public: true })
+                      const next = new URLSearchParams(searchParams)
+                      next.delete('create')
+                      setSearchParams(next, { replace: true })
+                    }}
+                    className="btn flex-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Crate Modal */}
-      {editingCrate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1A1A1A] rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Edit Crate</h2>
+      {
+        editingCrate && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-[#1A1A1A] rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Edit Crate</h2>
 
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name *</label>
-                <input
-                  type="text"
-                  value={updateForm.name}
-                  onChange={(e) => setUpdateForm({ ...updateForm, name: e.target.value })}
-                  className="input w-full"
-                  required
-                />
-              </div>
+              <form onSubmit={handleUpdate} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={updateForm.name}
+                    onChange={(e) => setUpdateForm({ ...updateForm, name: e.target.value })}
+                    className="input w-full"
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Description</label>
-                <textarea
-                  value={updateForm.description}
-                  onChange={(e) => setUpdateForm({ ...updateForm, description: e.target.value })}
-                  className="input w-full h-24 resize-none"
-                  placeholder="Optional description..."
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    value={updateForm.description}
+                    onChange={(e) => setUpdateForm({ ...updateForm, description: e.target.value })}
+                    className="input w-full h-24 resize-none"
+                    placeholder="Optional description..."
+                  />
+                </div>
 
-              <div className="flex gap-3 pt-2">
-                <button type="submit" className="btn btn-primary flex-1">
-                  Update Crate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingCrate(null)
-                    setUpdateForm({ name: '', description: '' })
-                  }}
-                  className="btn flex-1"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="update-public"
+                    checked={updateForm.is_public}
+                    onChange={(e) => setUpdateForm({ ...updateForm, is_public: e.target.checked })}
+                    className="rounded bg-[#2A2A2A] border-none text-[#1DB954] focus:ring-[#1DB954]"
+                  />
+                  <label htmlFor="update-public" className="text-sm font-medium cursor-pointer select-none flex items-center gap-2">
+                    {updateForm.is_public ? <Globe size={14} /> : <Lock size={14} />}
+                    {updateForm.is_public ? 'Public Crate' : 'Private Crate'}
+                  </label>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="submit" className="btn btn-primary flex-1">
+                    Update Crate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCrate(null)
+                      setUpdateForm({ name: '', description: '', is_public: true })
+                    }}
+                    className="btn flex-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }

@@ -91,6 +91,15 @@ export const cratesApi = {
 
   getTracks: (id: string, params?: { limit?: number; offset?: number }) =>
     api.get(`/api/playlists/${id}/tracks`, { params }),
+
+  updateVisibility: (id: string, isPublic: boolean) =>
+    api.patch(`/api/playlists/${id}/visibility`, { is_public: isPublic }),
+}
+
+// Community API functions
+export const communityApi = {
+  getPublicCrates: (params?: { limit?: number; offset?: number }) =>
+    api.get('/api/community/crates', { params }),
 }
 
 // Backwards compatibility
@@ -101,4 +110,15 @@ export type UnsortedParams = { limit?: number; offset?: number; q?: string }
 export const tracksApi = {
   getUnsorted: (params?: UnsortedParams) =>
     api.get('/api/tracks', { params: { ...(params || {}), playlist_id: 'unsorted' } }),
+
+  download: (id: string, filename: string) => {
+    // Create a temporary link to trigger download
+    // We use the API endpoint directly. Since we use cookies for auth, this works.
+    const link = document.createElement('a')
+    link.href = `/api/tracks/${id}/download`
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  },
 }

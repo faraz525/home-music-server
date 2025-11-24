@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, Plus } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, Plus, Globe } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useEffect, useState } from 'react'
@@ -115,6 +115,7 @@ export function Layout() {
             Library
           </NavLink>
           <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
+          <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
           {user?.role === 'admin' && (
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
           )}
@@ -167,6 +168,7 @@ export function Layout() {
               Library
             </NavLink>
             <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
+            <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
             {user?.role === 'admin' && (
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
             )}

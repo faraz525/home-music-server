@@ -82,5 +82,25 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Run migrations for existing databases
+	// Check if is_public column exists in playlists table
+	var columnCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*) 
+		FROM pragma_table_info('playlists') 
+		WHERE name='is_public'
+	`).Scan(&columnCount)
+	
+	if columnCount == 0 {
+		// Apply migration to add is_public column
+		migrationSQL, err := migrationsFS.ReadFile("migrations/001_add_is_public.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 001_add_is_public: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 001_add_is_public: %w", err)
+		}
+	}
+
 	return nil
 }

@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { CratesPage } from './pages/CratesPage'
+import { CommunityPage } from './pages/CommunityPage'
 import { UploadPage } from './pages/UploadPage'
 import { AdminPage } from './pages/AdminPage'
 import { NotFound } from './pages/NotFound'
@@ -32,6 +33,7 @@ export default function App() {
           <Route index element={<LibraryPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/crates" element={<CratesPage />} />
+          <Route path="/community" element={<CommunityPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Route>
         <Route path="*" element={<NotFound />} />

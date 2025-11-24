@@ -36,8 +36,8 @@ func (r *Repository) CreatePlaylist(ownerUserID string, req *imodels.CreatePlayl
 	}
 
 	query := `
-		INSERT INTO playlists (id, owner_user_id, name, description, is_default)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO playlists (id, owner_user_id, name, description, is_default, is_public)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
 	var description interface{}
@@ -47,7 +47,13 @@ func (r *Repository) CreatePlaylist(ownerUserID string, req *imodels.CreatePlayl
 		description = nil
 	}
 
-	_, err = r.db.DB.Exec(query, id, ownerUserID, req.Name, description, false)
+	// Default to public unless explicitly set to private
+	isPublic := true
+	if req.IsPublic != nil {
+		isPublic = *req.IsPublic
+	}
+
+	_, err = r.db.DB.Exec(query, id, ownerUserID, req.Name, description, false, isPublic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create playlist: %w", err)
 	}
@@ -58,7 +64,7 @@ func (r *Repository) CreatePlaylist(ownerUserID string, req *imodels.CreatePlayl
 // GetUserPlaylists returns all playlists for a user, including a virtual "Unsorted" playlist
 func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*imodels.PlaylistList, error) {
 	query := `
-		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
+		SELECT id, owner_user_id, name, description, is_default, is_public, created_at, updated_at
 		FROM playlists
 		WHERE owner_user_id = ?
 		ORDER BY is_default DESC, created_at DESC
@@ -82,6 +88,7 @@ func (r *Repository) GetUserPlaylists(userID string, limit, offset int) (*imodel
 			&playlist.Name,
 			&description,
 			&playlist.IsDefault,
+			&playlist.IsPublic,
 			&playlist.CreatedAt,
 			&playlist.UpdatedAt,
 		)
@@ -140,6 +147,7 @@ func (r *Repository) GetUserPlaylistsWithVirtual(userID string, limit, offset in
 			Name:        "Unsorted",
 			Description: &description,
 			IsDefault:   true,
+			IsPublic:    false, // Unsorted is always private
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
@@ -155,7 +163,7 @@ func (r *Repository) GetUserPlaylistsWithVirtual(userID string, limit, offset in
 // GetPlaylist returns a specific playlist by ID
 func (r *Repository) GetPlaylist(playlistID string) (*imodels.Playlist, error) {
 	query := `
-		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
+		SELECT id, owner_user_id, name, description, is_default, is_public, created_at, updated_at
 		FROM playlists
 		WHERE id = ?
 	`
@@ -169,6 +177,7 @@ func (r *Repository) GetPlaylist(playlistID string) (*imodels.Playlist, error) {
 		&playlist.Name,
 		&description,
 		&playlist.IsDefault,
+		&playlist.IsPublic,
 		&playlist.CreatedAt,
 		&playlist.UpdatedAt,
 	)
@@ -189,20 +198,28 @@ func (r *Repository) GetPlaylist(playlistID string) (*imodels.Playlist, error) {
 
 // UpdatePlaylist updates a playlist's information
 func (r *Repository) UpdatePlaylist(playlistID string, req *imodels.UpdatePlaylistRequest) error {
-	query := `
-		UPDATE playlists
-		SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?
-	`
-
+	// Build dynamic query based on what fields are provided
+	query := "UPDATE playlists SET name = ?, description = ?"
+	args := []interface{}{req.Name}
+	
 	var description interface{}
 	if req.Description != nil {
 		description = *req.Description
 	} else {
 		description = nil
 	}
+	args = append(args, description)
 
-	result, err := r.db.Exec(query, req.Name, description, playlistID)
+	// Handle is_public update if provided
+	if req.IsPublic != nil {
+		query += ", is_public = ?"
+		args = append(args, *req.IsPublic)
+	}
+
+	query += ", updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+	args = append(args, playlistID)
+
+	result, err := r.db.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update playlist: %w", err)
 	}
@@ -259,11 +276,11 @@ func (r *Repository) CreateDefaultPlaylist(ownerUserID string) (*imodels.Playlis
 	description := "Tracks not assigned to any playlist"
 
 	query := `
-		INSERT INTO playlists (id, owner_user_id, name, description, is_default)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO playlists (id, owner_user_id, name, description, is_default, is_public)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := r.db.Exec(query, id, ownerUserID, name, description, true)
+	_, err := r.db.Exec(query, id, ownerUserID, name, description, true, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create default playlist: %w", err)
 	}
@@ -274,7 +291,7 @@ func (r *Repository) CreateDefaultPlaylist(ownerUserID string) (*imodels.Playlis
 // GetDefaultPlaylist returns the default playlist for a user
 func (r *Repository) GetDefaultPlaylist(userID string) (*imodels.Playlist, error) {
 	query := `
-		SELECT id, owner_user_id, name, description, is_default, created_at, updated_at
+		SELECT id, owner_user_id, name, description, is_default, is_public, created_at, updated_at
 		FROM playlists
 		WHERE owner_user_id = ? AND is_default = true
 	`
@@ -288,6 +305,7 @@ func (r *Repository) GetDefaultPlaylist(userID string) (*imodels.Playlist, error
 		&playlist.Name,
 		&description,
 		&playlist.IsDefault,
+		&playlist.IsPublic,
 		&playlist.CreatedAt,
 		&playlist.UpdatedAt,
 	)
@@ -721,4 +739,108 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 		Offset:  offset,
 		HasNext: hasNext,
 	}, nil
+}
+
+// GetPublicPlaylists returns all public playlists with owner information
+// Excludes default (unsorted) playlists which are always private
+func (r *Repository) GetPublicPlaylists(limit, offset int) ([]*imodels.PlaylistWithOwner, int, error) {
+	query := `
+		SELECT p.id, p.owner_user_id, p.name, p.description, p.is_default, p.is_public,
+		       p.created_at, p.updated_at, u.email
+		FROM playlists p
+		INNER JOIN users u ON p.owner_user_id = u.id
+		WHERE p.is_public = TRUE AND p.is_default = FALSE
+		ORDER BY p.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := r.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get public playlists: %w", err)
+	}
+	defer rows.Close()
+
+	var playlists []*imodels.PlaylistWithOwner
+	for rows.Next() {
+		playlist := &imodels.Playlist{}
+		var description sql.NullString
+		var ownerEmail string
+
+		err := rows.Scan(
+			&playlist.ID,
+			&playlist.OwnerUserID,
+			&playlist.Name,
+			&description,
+			&playlist.IsDefault,
+			&playlist.IsPublic,
+			&playlist.CreatedAt,
+			&playlist.UpdatedAt,
+			&ownerEmail,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan playlist: %w", err)
+		}
+
+		if description.Valid {
+			playlist.Description = &description.String
+		}
+
+		playlistWithOwner := &imodels.PlaylistWithOwner{
+			Playlist:   playlist,
+			OwnerEmail: ownerEmail,
+		}
+
+		playlists = append(playlists, playlistWithOwner)
+	}
+
+	// Get total count of public playlists
+	countQuery := `SELECT COUNT(*) FROM playlists WHERE is_public = TRUE AND is_default = FALSE`
+	var total int
+	err = r.db.QueryRow(countQuery).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get public playlist count: %w", err)
+	}
+
+	return playlists, total, nil
+}
+
+// UpdatePlaylistVisibility updates the visibility of a playlist
+// Note: Unsorted (is_default=true) playlists cannot be made public
+func (r *Repository) UpdatePlaylistVisibility(playlistID string, isPublic bool) error {
+	// First check if this is a default playlist
+	var isDefault bool
+	err := r.db.QueryRow("SELECT is_default FROM playlists WHERE id = ?", playlistID).Scan(&isDefault)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("playlist not found")
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check playlist: %w", err)
+	}
+
+	// Prevent making unsorted playlists public
+	if isDefault && isPublic {
+		return fmt.Errorf("unsorted crates cannot be made public")
+	}
+
+	query := `
+		UPDATE playlists
+		SET is_public = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+
+	result, err := r.db.Exec(query, isPublic, playlistID)
+	if err != nil {
+		return fmt.Errorf("failed to update playlist visibility: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("playlist not found")
+	}
+
+	return nil
 }

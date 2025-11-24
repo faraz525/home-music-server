@@ -19,5 +19,12 @@ func Routes(m *Manager) func(*gin.RouterGroup) {
 
 		// Special endpoint for unsorted tracks
 		g.GET("/unsorted", GetUnsortedTracksHandler(m))
+
+		// Playlist visibility management
+		g.PATCH("/:id/visibility", UpdatePlaylistVisibilityHandler(m))
+
+		// Community endpoints - public playlists
+		community := r.Group("/community")
+		community.GET("/crates", GetPublicPlaylistsHandler(m))
 	}
 }
