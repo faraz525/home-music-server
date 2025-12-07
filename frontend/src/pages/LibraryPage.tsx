@@ -5,10 +5,12 @@ import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MoreHorizontal, ListPlus, Play, Pause, Music, Download } from 'lucide-react'
 import type { CrateList, TrackList } from '../types/crates'
+import { useToast } from '../hooks/useToast'
 
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
   const current = queue[index]
+  const toast = useToast()
   const [q, setQ] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCrate, setSelectedCrate] = useState<string>(() => searchParams.get('crate') || 'all')
@@ -107,6 +109,14 @@ export function LibraryPage() {
     fetchTracks()
   }, [fetchTracks])
 
+  // Debounced search - automatically search 500ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTracks()
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [q])
+
   // Listen for track updates from drag and drop
   useEffect(() => {
     const handleTracksUpdated = () => {
@@ -133,8 +143,14 @@ export function LibraryPage() {
 
 
   async function onDelete(id: string) {
-    await api.delete(`/api/tracks/${id}`)
-    await fetchTracks()
+    try {
+      await api.delete(`/api/tracks/${id}`)
+      await fetchTracks()
+      toast.success('Track deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete track:', error)
+      toast.error('Failed to delete track')
+    }
   }
 
   async function addTrackToCrate(trackId: string, crateId: string) {
@@ -142,8 +158,10 @@ export function LibraryPage() {
       await cratesApi.addTracks(crateId, [trackId])
       await fetchTracks()
       await fetchCrates()
+      toast.success('Track added to crate')
     } catch (error) {
       console.error('Failed to add track to crate:', error)
+      toast.error('Failed to add track to crate')
     }
   }
 
@@ -152,8 +170,10 @@ export function LibraryPage() {
       await cratesApi.removeTracks(crateId, [trackId])
       await fetchTracks()
       await fetchCrates()
+      toast.success('Track removed from crate')
     } catch (error) {
       console.error('Failed to remove track from crate:', error)
+      toast.error('Failed to remove track from crate')
     }
   }
 
@@ -166,8 +186,10 @@ export function LibraryPage() {
       setSelectedTrackIds(new Set())
       await fetchTracks()
       await fetchCrates()
+      toast.success(`Added ${ids.length} track${ids.length > 1 ? 's' : ''} to crate`)
     } catch (error) {
       console.error('Failed bulk add:', error)
+      toast.error('Failed to add tracks to crate')
     }
   }
 
@@ -180,8 +202,10 @@ export function LibraryPage() {
       setSelectedTrackIds(new Set())
       await fetchTracks()
       await fetchCrates()
+      toast.success(`Removed ${ids.length} track${ids.length > 1 ? 's' : ''} from crate`)
     } catch (error) {
       console.error('Failed bulk remove:', error)
+      toast.error('Failed to remove tracks from crate')
     }
   }
 
@@ -305,10 +329,22 @@ export function LibraryPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                fetchTracks()
+              }
+            }}
             placeholder="Search your library"
             className="input flex-1"
           />
-          <button className="btn btn-primary" onClick={fetchTracks}>Search</button>
+          {q && (
+            <button
+              className="btn"
+              onClick={() => setQ('')}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

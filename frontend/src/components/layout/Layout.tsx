@@ -1,13 +1,15 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, Plus, Globe } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useEffect, useState } from 'react'
 import { cratesApi, normalizeCrateList } from '../../lib/api'
 import type { CrateList } from '../../types/crates'
+import { useToast } from '../../hooks/useToast'
 
 export function Layout() {
   const { user, logout } = useAuth()
+  const toast = useToast()
   const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
@@ -32,11 +34,9 @@ export function Layout() {
     load()
     const handler = () => load()
     window.addEventListener('crates:updated', handler)
-    window.addEventListener('playlists:updated', handler)
     return () => {
       mounted = false
       window.removeEventListener('crates:updated', handler)
-      window.removeEventListener('playlists:updated', handler)
     }
   }, [location.pathname])
 
@@ -73,10 +73,13 @@ export function Layout() {
           // Trigger refresh events
           window.dispatchEvent(new CustomEvent('crates:updated'))
           window.dispatchEvent(new CustomEvent('tracks:updated'))
+          const count = trackIds.length
+          toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)
         }
       }
     } catch (error) {
       console.error('Failed to add tracks to crate:', error)
+      toast.error('Failed to add tracks to crate')
     }
   }
 
@@ -135,7 +138,7 @@ export function Layout() {
               </Link>
             ))}
             <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><Plus size={16} /></span>
+              <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
               Manage Crates
             </Link>
           </div>
@@ -188,7 +191,7 @@ export function Layout() {
                 </Link>
               ))}
               <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-                <span className="text-[#1DB954]"><Plus size={16} /></span>
+                <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
                 Manage Crates
               </Link>
             </div>

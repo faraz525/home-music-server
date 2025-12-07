@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Plus, Edit, Trash2, Music, MoreHorizontal, Globe, Lock } from 'lucide-react'
 import { cratesApi, normalizeCrateList } from '../lib/api'
 import { Crate, CrateList, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
+import { useToast } from '../hooks/useToast'
 
 export function CratesPage() {
   const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
@@ -14,6 +15,8 @@ export function CratesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
+  const toast = useToast()
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchCrates()
@@ -60,8 +63,10 @@ export function CratesPage() {
       next.delete('create')
       setSearchParams(next, { replace: true })
       await fetchCrates()
+      toast.success(`Crate "${createForm.name}" created successfully`)
     } catch (error) {
       console.error('Failed to create crate:', error)
+      toast.error('Failed to create crate')
     }
   }
 
@@ -75,8 +80,10 @@ export function CratesPage() {
       setUpdateForm({ name: '', description: '', is_public: true })
       window.dispatchEvent(new CustomEvent('crates:updated'))
       await fetchCrates()
+      toast.success(`Crate "${updateForm.name}" updated successfully`)
     } catch (error) {
       console.error('Failed to update crate:', error)
+      toast.error('Failed to update crate')
     }
   }
 
@@ -89,8 +96,10 @@ export function CratesPage() {
       await cratesApi.delete(crate.id)
       window.dispatchEvent(new CustomEvent('crates:updated'))
       await fetchCrates()
+      toast.success(`Crate "${crate.name}" deleted successfully`)
     } catch (error) {
       console.error('Failed to delete crate:', error)
+      toast.error('Failed to delete crate')
     }
   }
 
@@ -130,10 +139,13 @@ export function CratesPage() {
           await cratesApi.addTracks(crateId, trackIds)
           window.dispatchEvent(new CustomEvent('crates:updated'))
           await fetchCrates()
+          const count = trackIds.length
+          toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)
         }
       }
     } catch (error) {
       console.error('Failed to add tracks to crate:', error)
+      toast.error('Failed to add tracks to crate')
     }
   }
 
@@ -165,10 +177,11 @@ export function CratesPage() {
         {Array.isArray(crates.crates) && crates.crates.filter(c => c.id !== 'unsorted').map((crate) => (
           <div
             key={crate.id}
-            className={`card p-4 group transition-all relative ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+            className={`card p-4 group transition-all relative cursor-pointer hover:bg-[#202020] ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
             onDragOver={(e) => handleDragOver(e, crate.id)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, crate.id)}
+            onClick={() => navigate(`/?crate=${crate.id}`)}
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3 flex-1">
@@ -200,7 +213,10 @@ export function CratesPage() {
                 <div className="relative">
                   <button
                     className="p-1 hover:bg-[#2A2A2A] rounded"
-                    onClick={() => setMenuOpen(menuOpen === crate.id ? null : crate.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMenuOpen(menuOpen === crate.id ? null : crate.id)
+                    }}
                   >
                     <MoreHorizontal size={16} />
                   </button>
@@ -208,7 +224,8 @@ export function CratesPage() {
                   {menuOpen === crate.id && (
                     <div className="crate-menu absolute right-0 mt-1 w-32 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           startEdit(crate)
                           setMenuOpen(null)
                         }}
@@ -218,7 +235,8 @@ export function CratesPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           handleDelete(crate)
                           setMenuOpen(null)
                         }}

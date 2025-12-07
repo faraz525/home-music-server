@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Globe, Music, Play, Pause, User } from 'lucide-react'
 import { communityApi, cratesApi } from '../lib/api'
 import type { PlaylistWithOwner } from '../types/crates'
+import { usePlayer } from '../state/player'
 
 type CrateWithTracks = PlaylistWithOwner & {
     tracks?: any[]
@@ -13,20 +14,11 @@ export function CommunityPage() {
     const [loading, setLoading] = useState(true)
     const [expandedCrate, setExpandedCrate] = useState<string | null>(null)
     const [loadingTracks, setLoadingTracks] = useState<string | null>(null)
-    const [playingTrack, setPlayingTrack] = useState<string | null>(null)
-    const [audio] = useState(new Audio())
+    const { play, queue, index } = usePlayer()
 
     useEffect(() => {
         fetchPublicCrates()
     }, [])
-
-    useEffect(() => {
-        // Cleanup audio on unmount
-        return () => {
-            audio.pause()
-            audio.src = ''
-        }
-    }, [audio])
 
     const fetchPublicCrates = async () => {
         try {
@@ -71,21 +63,14 @@ export function CommunityPage() {
         }
     }
 
-    const handlePlayTrack = (trackId: string, crateId: string) => {
-        if (playingTrack === trackId) {
-            audio.pause()
-            setPlayingTrack(null)
-            return
-        }
-
-        audio.pause()
-        audio.src = `/api/tracks/${trackId}/stream`
-        audio.play()
-        setPlayingTrack(trackId)
-
-        audio.onended = () => {
-            setPlayingTrack(null)
-        }
+    const handlePlayTrack = (track: any, crateId: string) => {
+        play({
+            id: track.id,
+            title: track.title || track.original_filename,
+            artist: track.artist || 'Unknown Artist',
+            streamUrl: `/api/tracks/${track.id}/stream`,
+            durationSeconds: track.duration_seconds
+        }, true)
     }
 
     if (loading) {
@@ -167,11 +152,11 @@ export function CommunityPage() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            handlePlayTrack(track.id, crate.id)
+                                                            handlePlayTrack(track, crate.id)
                                                         }}
                                                         className="p-2 hover:bg-[#1DB954]/20 rounded-full transition-colors"
                                                     >
-                                                        {playingTrack === track.id ? (
+                                                        {queue[index]?.id === track.id ? (
                                                             <Pause size={18} className="text-[#1DB954]" />
                                                         ) : (
                                                             <Play size={18} className="text-[#1DB954]" />
