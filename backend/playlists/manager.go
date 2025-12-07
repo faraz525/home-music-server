@@ -228,13 +228,14 @@ func (m *Manager) GetPlaylistTracks(playlistID, requestingUserID string, limit, 
 		}, nil
 	}
 
-	// Check playlist ownership
+	// Check playlist access
 	playlist, err := m.repo.GetPlaylist(playlistID)
 	if err != nil {
 		return nil, err
 	}
 
-	if playlist.OwnerUserID != requestingUserID {
+	// Allow access if playlist is public OR if user is the owner
+	if !playlist.IsPublic && playlist.OwnerUserID != requestingUserID {
 		return nil, fmt.Errorf("access denied: playlist belongs to another user")
 	}
 

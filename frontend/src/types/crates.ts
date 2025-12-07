@@ -39,6 +39,7 @@ export type CreateCrateRequest = {
 export type UpdateCrateRequest = {
   name: string
   description?: string
+  is_public?: boolean
 }
 
 export type AddTracksToCrateRequest = {

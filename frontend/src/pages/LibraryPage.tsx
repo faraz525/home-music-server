@@ -244,11 +244,26 @@ export function LibraryPage() {
 
   // selected crate is controlled by the URL and sidebar links
 
+  // Get the current crate name for display
+  const currentCrateName = (() => {
+    if (!selectedCrate || selectedCrate === 'all') return 'Your Library'
+    if (selectedCrate === 'unsorted') return 'Unsorted'
+    const crate = crates.crates?.find(c => c.id === selectedCrate)
+    return crate?.name || 'Your Library'
+  })()
+
+  const currentCrateDescription = (() => {
+    if (!selectedCrate || selectedCrate === 'all') return 'All your music in one place'
+    if (selectedCrate === 'unsorted') return 'Tracks not assigned to any crate'
+    const crate = crates.crates?.find(c => c.id === selectedCrate)
+    return crate?.description || 'Browse your music'
+  })()
+
   return (
     <div className="space-y-6 overflow-visible">
       <div>
-        <h1 className="text-2xl font-bold">Your Library</h1>
-        <p className="text-[#A1A1A1] mt-1">All your music in one place</p>
+        <h1 className="text-2xl font-bold">{currentCrateName}</h1>
+        <p className="text-[#A1A1A1] mt-1">{currentCrateDescription}</p>
       </div>
 
       {/* Bulk selection toolbar */}

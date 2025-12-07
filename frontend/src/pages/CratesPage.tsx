@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Edit, Trash2, Music, MoreHorizontal, Globe, Lock } from 'lucide-react'
-import { cratesApi } from '../lib/api'
+import { cratesApi, normalizeCrateList } from '../lib/api'
 import { Crate, CrateList, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
 
 export function CratesPage() {
@@ -37,11 +37,8 @@ export function CratesPage() {
   const fetchCrates = async () => {
     try {
       const { data } = await cratesApi.list()
-      // Ensure safe structure
-      const safe: CrateList = data && Array.isArray(data.crates)
-        ? data
-        : { crates: [], total: 0, limit: 20, offset: 0, has_next: false }
-      setCrates(safe)
+      // Use normalizeCrateList to handle both 'crates' and 'playlists' fields
+      setCrates(normalizeCrateList(data))
     } catch (error) {
       console.error('Failed to fetch crates:', error)
       setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
