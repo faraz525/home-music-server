@@ -34,6 +34,7 @@ export type CrateList = {
 export type CreateCrateRequest = {
   name: string
   description?: string
+  is_public?: boolean
 }
 
 export type UpdateCrateRequest = {

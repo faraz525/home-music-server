@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
-import { api, cratesApi, CrateList, normalizeCrateList } from '../lib/api'
-import type { Crate } from '../types/crates'
+import { api, cratesApi, normalizeCrateList } from '../lib/api'
+import type { Crate, CrateList } from '../types/crates'
 import { Upload, Music, X } from 'lucide-react'
 
 export function UploadPage() {
@@ -193,7 +193,7 @@ export function UploadPage() {
               {loadingCrates ? (
                 <option disabled>Loading crates...</option>
               ) : (
-                (crates.crates || []).filter((c: { id: string }) => c.id !== 'unsorted').map((crate) => (
+                (crates.crates || []).filter((c) => c.id !== 'unsorted').map((crate: Crate) => (
                   <option key={crate.id} value={crate.id}>
                     {crate.name}
                   </option>

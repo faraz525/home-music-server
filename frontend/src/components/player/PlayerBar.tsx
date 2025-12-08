@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { usePlayer } from '../../state/player'
 
@@ -6,6 +6,7 @@ export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const barRef = useRef<HTMLDivElement | null>(null)
   const prevTrackIdRef = useRef<string | undefined>(undefined)
+  const lastProgressUpdateRef = useRef<number>(0)
   const { queue, index, next, prev, isPlaying, toggle } = usePlayer()
   const current = queue[index]
   const [progress, setProgress] = useState(0)
@@ -15,7 +16,14 @@ export function PlayerBar() {
   useEffect(() => {
     if (!audioRef.current) return
     const el = audioRef.current
-    const onTime = () => setProgress(el.currentTime)
+    // Throttle progress updates to ~4 times per second (250ms) to reduce re-renders
+    const onTime = () => {
+      const now = Date.now()
+      if (now - lastProgressUpdateRef.current >= 250) {
+        setProgress(el.currentTime)
+        lastProgressUpdateRef.current = now
+      }
+    }
     const onLoaded = () => setDuration(isFinite(el.duration) ? el.duration : 0)
     const onEnded = () => {
       // Auto-play next track when current track ends

@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Plus, Edit, Trash2, Music, MoreHorizontal, Globe, Lock } from 'lucide-react'
-import { cratesApi, normalizeCrateList } from '../lib/api'
-import { Crate, CrateList, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
+import { Crate, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
 import { useToast } from '../hooks/useToast'
+import { useCrates, useCreateCrate, useUpdateCrate, useDeleteCrate, useAddTracksToCrate } from '../hooks/useQueries'
 
 export function CratesPage() {
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loading, setLoading] = useState(true)
+  const { data: crates, isLoading: loading } = useCrates()
+  const createCrateMutation = useCreateCrate()
+  const updateCrateMutation = useUpdateCrate()
+  const deleteCrateMutation = useDeleteCrate()
+  const addTracksMutation = useAddTracksToCrate()
+
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingCrate, setEditingCrate] = useState<Crate | null>(null)
   const [createForm, setCreateForm] = useState<CreateCrateRequest>({ name: '', description: '', is_public: true })
@@ -19,14 +23,9 @@ export function CratesPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    fetchCrates()
-  }, [])
-
-  useEffect(() => {
     if (searchParams.get('create') === '1') setShowCreateModal(true)
   }, [searchParams])
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuOpen && !(event.target as Element).closest('.crate-menu')) {
@@ -37,96 +36,76 @@ export function CratesPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [menuOpen])
 
-  const fetchCrates = async () => {
-    try {
-      const { data } = await cratesApi.list()
-      // Use normalizeCrateList to handle both 'crates' and 'playlists' fields
-      setCrates(normalizeCrateList(data))
-    } catch (error) {
-      console.error('Failed to fetch crates:', error)
-      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!createForm.name.trim()) return
 
     try {
-      await cratesApi.create(createForm)
+      await createCrateMutation.mutateAsync(createForm)
+      toast.success(`Crate "${createForm.name}" created successfully`)
       setCreateForm({ name: '', description: '', is_public: true })
       setShowCreateModal(false)
-      window.dispatchEvent(new CustomEvent('crates:updated'))
       const next = new URLSearchParams(searchParams)
       next.delete('create')
       setSearchParams(next, { replace: true })
-      await fetchCrates()
-      toast.success(`Crate "${createForm.name}" created successfully`)
     } catch (error) {
       console.error('Failed to create crate:', error)
       toast.error('Failed to create crate')
     }
-  }
+  }, [createForm, createCrateMutation, searchParams, setSearchParams, toast])
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingCrate || !updateForm.name.trim()) return
 
     try {
-      await cratesApi.update(editingCrate.id, updateForm)
+      await updateCrateMutation.mutateAsync({ id: editingCrate.id, data: updateForm })
+      toast.success(`Crate "${updateForm.name}" updated successfully`)
       setEditingCrate(null)
       setUpdateForm({ name: '', description: '', is_public: true })
-      window.dispatchEvent(new CustomEvent('crates:updated'))
-      await fetchCrates()
-      toast.success(`Crate "${updateForm.name}" updated successfully`)
     } catch (error) {
       console.error('Failed to update crate:', error)
       toast.error('Failed to update crate')
     }
-  }
+  }, [editingCrate, updateForm, updateCrateMutation, toast])
 
-  const handleDelete = async (crate: Crate) => {
+  const handleDelete = useCallback(async (crate: Crate) => {
     if (!confirm(`Are you sure you want to delete "${crate.name}"? This action cannot be undone.`)) {
       return
     }
 
     try {
-      await cratesApi.delete(crate.id)
-      window.dispatchEvent(new CustomEvent('crates:updated'))
-      await fetchCrates()
+      await deleteCrateMutation.mutateAsync(crate.id)
       toast.success(`Crate "${crate.name}" deleted successfully`)
     } catch (error) {
       console.error('Failed to delete crate:', error)
       toast.error('Failed to delete crate')
     }
-  }
+  }, [deleteCrateMutation, toast])
 
-  const startEdit = (crate: Crate) => {
+  const startEdit = useCallback((crate: Crate) => {
     setEditingCrate(crate)
     setUpdateForm({
       name: crate.name,
       description: crate.description || '',
       is_public: crate.is_public
     })
-  }
+  }, [])
 
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent, crateId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, crateId: string) => {
     e.preventDefault()
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'copy'
     setDragOverCrateId(crateId)
-  }
+  }, [])
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragOverCrateId(null)
-  }
+  }, [])
 
-  const handleDrop = async (e: React.DragEvent, crateId: string) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, crateId: string) => {
     e.preventDefault()
     e.stopPropagation()
     setDragOverCrateId(null)
@@ -136,9 +115,7 @@ export function CratesPage() {
       if (data) {
         const { trackIds } = JSON.parse(data)
         if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
-          await cratesApi.addTracks(crateId, trackIds)
-          window.dispatchEvent(new CustomEvent('crates:updated'))
-          await fetchCrates()
+          await addTracksMutation.mutateAsync({ crateId, trackIds })
           const count = trackIds.length
           toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)
         }
@@ -147,7 +124,7 @@ export function CratesPage() {
       console.error('Failed to add tracks to crate:', error)
       toast.error('Failed to add tracks to crate')
     }
-  }
+  }, [addTracksMutation, toast])
 
   if (loading) {
     return (
@@ -174,7 +151,7 @@ export function CratesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.isArray(crates.crates) && crates.crates.filter(c => c.id !== 'unsorted').map((crate) => (
+        {crates?.crates.filter(c => c.id !== 'unsorted').map((crate) => (
           <div
             key={crate.id}
             className={`card p-4 group transition-all relative cursor-pointer hover:bg-[#202020] ${dragOverCrateId === crate.id ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
@@ -259,7 +236,7 @@ export function CratesPage() {
       </div>
 
       {
-        (!Array.isArray(crates.crates) || crates.crates.filter(c => c.id !== 'unsorted').length === 0) && (
+        (!crates?.crates.length || crates.crates.filter(c => c.id !== 'unsorted').length === 0) && (
           <div className="text-center py-12">
             <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
             <h3 className="text-lg font-semibold mb-2">No crates yet</h3>

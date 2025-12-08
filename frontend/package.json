@@ -9,6 +9,7 @@
     "preview": "vite preview --port 5173 --strictPort"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.12",
     "axios": "^1.7.2",
     "classnames": "^2.5.1",
     "lucide-react": "^0.439.0",
