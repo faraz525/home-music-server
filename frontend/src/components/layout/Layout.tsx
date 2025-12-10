@@ -3,42 +3,18 @@ import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Gl
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useEffect, useState } from 'react'
-import { cratesApi, normalizeCrateList } from '../../lib/api'
-import type { CrateList } from '../../types/crates'
+import { useCrates } from '../../state/crates'
 import { useToast } from '../../hooks/useToast'
 
 export function Layout() {
   const { user, logout } = useAuth()
   const toast = useToast()
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
+  const { crates, addTracksToCrate } = useCrates()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
   const location = useLocation()
   const search = new URLSearchParams(location.search)
   const selectedCrateId = search.get('crate') || search.get('playlist')
-
-  useEffect(() => {
-    let mounted = true
-    const load = () =>
-      cratesApi
-        .list()
-        .then(({ data }) => {
-          if (!mounted) return
-          setCrates(normalizeCrateList(data))
-        })
-        .catch(() => {
-          if (!mounted) return
-          setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-        })
-
-    load()
-    const handler = () => load()
-    window.addEventListener('crates:updated', handler)
-    return () => {
-      mounted = false
-      window.removeEventListener('crates:updated', handler)
-    }
-  }, [location.pathname])
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -69,9 +45,8 @@ export function Layout() {
       if (data) {
         const { trackIds } = JSON.parse(data)
         if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
-          await cratesApi.addTracks(crateId, trackIds)
-          // Trigger refresh events
-          window.dispatchEvent(new CustomEvent('crates:updated'))
+          await addTracksToCrate(crateId, trackIds)
+          // Trigger tracks refresh for any listening components
           window.dispatchEvent(new CustomEvent('tracks:updated'))
           const count = trackIds.length
           toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Plus, Edit, Trash2, Music, MoreHorizontal, Globe, Lock } from 'lucide-react'
-import { cratesApi, normalizeCrateList } from '../lib/api'
-import { Crate, CrateList, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
+import { useCrates } from '../state/crates'
+import { Crate, CreateCrateRequest, UpdateCrateRequest } from '../types/crates'
 import { useToast } from '../hooks/useToast'
 
 export function CratesPage() {
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loading, setLoading] = useState(true)
+  const { crates, loading, createCrate, updateCrate, deleteCrate, addTracksToCrate } = useCrates()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingCrate, setEditingCrate] = useState<Crate | null>(null)
   const [createForm, setCreateForm] = useState<CreateCrateRequest>({ name: '', description: '', is_public: true })
@@ -17,10 +16,6 @@ export function CratesPage() {
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
   const toast = useToast()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    fetchCrates()
-  }, [])
 
   useEffect(() => {
     if (searchParams.get('create') === '1') setShowCreateModal(true)
@@ -37,33 +32,19 @@ export function CratesPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [menuOpen])
 
-  const fetchCrates = async () => {
-    try {
-      const { data } = await cratesApi.list()
-      // Use normalizeCrateList to handle both 'crates' and 'playlists' fields
-      setCrates(normalizeCrateList(data))
-    } catch (error) {
-      console.error('Failed to fetch crates:', error)
-      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!createForm.name.trim()) return
 
     try {
-      await cratesApi.create(createForm)
+      await createCrate(createForm)
+      const crateName = createForm.name
       setCreateForm({ name: '', description: '', is_public: true })
       setShowCreateModal(false)
-      window.dispatchEvent(new CustomEvent('crates:updated'))
       const next = new URLSearchParams(searchParams)
       next.delete('create')
       setSearchParams(next, { replace: true })
-      await fetchCrates()
-      toast.success(`Crate "${createForm.name}" created successfully`)
+      toast.success(`Crate "${crateName}" created successfully`)
     } catch (error) {
       console.error('Failed to create crate:', error)
       toast.error('Failed to create crate')
@@ -75,12 +56,11 @@ export function CratesPage() {
     if (!editingCrate || !updateForm.name.trim()) return
 
     try {
-      await cratesApi.update(editingCrate.id, updateForm)
+      const crateName = updateForm.name
+      await updateCrate(editingCrate.id, updateForm)
       setEditingCrate(null)
       setUpdateForm({ name: '', description: '', is_public: true })
-      window.dispatchEvent(new CustomEvent('crates:updated'))
-      await fetchCrates()
-      toast.success(`Crate "${updateForm.name}" updated successfully`)
+      toast.success(`Crate "${crateName}" updated successfully`)
     } catch (error) {
       console.error('Failed to update crate:', error)
       toast.error('Failed to update crate')
@@ -93,10 +73,9 @@ export function CratesPage() {
     }
 
     try {
-      await cratesApi.delete(crate.id)
-      window.dispatchEvent(new CustomEvent('crates:updated'))
-      await fetchCrates()
-      toast.success(`Crate "${crate.name}" deleted successfully`)
+      const crateName = crate.name
+      await deleteCrate(crate.id)
+      toast.success(`Crate "${crateName}" deleted successfully`)
     } catch (error) {
       console.error('Failed to delete crate:', error)
       toast.error('Failed to delete crate')
@@ -136,9 +115,7 @@ export function CratesPage() {
       if (data) {
         const { trackIds } = JSON.parse(data)
         if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
-          await cratesApi.addTracks(crateId, trackIds)
-          window.dispatchEvent(new CustomEvent('crates:updated'))
-          await fetchCrates()
+          await addTracksToCrate(crateId, trackIds)
           const count = trackIds.length
           toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)
         }

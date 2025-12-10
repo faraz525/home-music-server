@@ -9,6 +9,7 @@ import { UploadPage } from './pages/UploadPage'
 import { AdminPage } from './pages/AdminPage'
 import { NotFound } from './pages/NotFound'
 import { AuthProvider, useAuth } from './state/auth'
+import { CratesProvider } from './state/crates'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { isAuthenticated, ready } = useAuth()
@@ -26,7 +27,9 @@ export default function App() {
           path="/"
           element={
             <PrivateRoute>
-              <Layout />
+              <CratesProvider>
+                <Layout />
+              </CratesProvider>
             </PrivateRoute>
           }
         >

@@ -1,11 +1,12 @@
-import { api, cratesApi, normalizeCrateList, tracksApi } from '../lib/api'
+import { api, tracksApi } from '../lib/api'
 import type { UnsortedParams } from '../lib/api'
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MoreHorizontal, ListPlus, Play, Pause, Music, Download } from 'lucide-react'
-import type { CrateList, TrackList } from '../types/crates'
+import type { TrackList } from '../types/crates'
 import { useToast } from '../hooks/useToast'
+import { useCrates } from '../state/crates'
 
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
@@ -15,28 +16,13 @@ export function LibraryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCrate, setSelectedCrate] = useState<string>(() => searchParams.get('crate') || 'all')
   const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loadingCrates, setLoadingCrates] = useState(true)
+  const { crates, loading: loadingCrates, addTracksToCrate, removeTracksFromCrate } = useCrates()
   const [loadingTracks, setLoadingTracks] = useState(true)
   const [showCrateDropdown, setShowCrateDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
   const [draggingTrackIds, setDraggingTrackIds] = useState<Set<string>>(new Set())
-
-  // Fetch crates
-  const fetchCrates = async () => {
-    try {
-      setLoadingCrates(true)
-      const { data } = await cratesApi.list()
-      setCrates(normalizeCrateList(data))
-    } catch (error) {
-      console.error('Failed to fetch crates:', error)
-      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoadingCrates(false)
-    }
-  }
 
   // Fetch tracks based on selected crate
   const fetchTracks = useMemo(() => async () => {
@@ -73,9 +59,6 @@ export function LibraryPage() {
     }
   }, [q, selectedCrate])
 
-  useEffect(() => {
-    fetchCrates()
-  }, [])
 
   // Keep selected crate in sync with URL (?crate=<id>|unsorted or none => all)
   useEffect(() => {
@@ -155,9 +138,8 @@ export function LibraryPage() {
 
   async function addTrackToCrate(trackId: string, crateId: string) {
     try {
-      await cratesApi.addTracks(crateId, [trackId])
+      await addTracksToCrate(crateId, [trackId])
       await fetchTracks()
-      await fetchCrates()
       toast.success('Track added to crate')
     } catch (error) {
       console.error('Failed to add track to crate:', error)
@@ -167,9 +149,8 @@ export function LibraryPage() {
 
   async function removeTrackFromCrate(trackId: string, crateId: string) {
     try {
-      await cratesApi.removeTracks(crateId, [trackId])
+      await removeTracksFromCrate(crateId, [trackId])
       await fetchTracks()
-      await fetchCrates()
       toast.success('Track removed from crate')
     } catch (error) {
       console.error('Failed to remove track from crate:', error)
@@ -182,10 +163,9 @@ export function LibraryPage() {
     try {
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await cratesApi.addTracks(crateId, ids)
+      await addTracksToCrate(crateId, ids)
       setSelectedTrackIds(new Set())
       await fetchTracks()
-      await fetchCrates()
       toast.success(`Added ${ids.length} track${ids.length > 1 ? 's' : ''} to crate`)
     } catch (error) {
       console.error('Failed bulk add:', error)
@@ -198,10 +178,9 @@ export function LibraryPage() {
       if (!selectedCrate || selectedCrate === 'all' || selectedCrate === 'unsorted') return
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await cratesApi.removeTracks(selectedCrate, ids)
+      await removeTracksFromCrate(selectedCrate, ids)
       setSelectedTrackIds(new Set())
       await fetchTracks()
-      await fetchCrates()
       toast.success(`Removed ${ids.length} track${ids.length > 1 ? 's' : ''} from crate`)
     } catch (error) {
       console.error('Failed bulk remove:', error)

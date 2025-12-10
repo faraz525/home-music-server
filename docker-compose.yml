@@ -15,7 +15,7 @@ services:
       REFRESH_SECRET: ${REFRESH_SECRET:-dev-refresh-secret}
     user: "1000:1000"
     volumes:
-      - /mnt/music/cratedrop:/data:rw
+      - /mnt/ssd/apps/cratedrop:/data:rw
       - ./logs:/app/logs:rw
     ports:
       - "8080:8080" # direct access (optional); nginx proxies to this

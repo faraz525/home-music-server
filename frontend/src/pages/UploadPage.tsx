@@ -1,34 +1,15 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
-import { api, cratesApi, CrateList, normalizeCrateList } from '../lib/api'
-import type { Crate } from '../types/crates'
+import { ChangeEvent, FormEvent, useState } from 'react'
+import { api } from '../lib/api'
 import { Upload, Music, X } from 'lucide-react'
+import { useCrates } from '../state/crates'
 
 export function UploadPage() {
   const [files, setFiles] = useState<File[]>([])
   const [selectedCrate, setSelectedCrate] = useState<string>('unsorted')
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loadingCrates, setLoadingCrates] = useState(true)
+  const { crates, loading: loadingCrates } = useCrates()
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<{ [key: string]: number }>({})
   const [completed, setCompleted] = useState<Set<string>>(new Set())
-
-  // Fetch crates
-  const fetchCrates = async () => {
-    try {
-      setLoadingCrates(true)
-      const { data } = await cratesApi.list()
-      setCrates(normalizeCrateList(data))
-    } catch (error) {
-      console.error('Failed to fetch crates:', error)
-      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoadingCrates(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchCrates()
-  }, [])
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
