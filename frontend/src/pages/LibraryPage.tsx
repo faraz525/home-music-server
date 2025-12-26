@@ -1,79 +1,46 @@
-import { api, cratesApi, normalizeCrateList, tracksApi } from '../lib/api'
-import type { UnsortedParams } from '../lib/api'
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { tracksApi } from '../lib/api'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
-import { MoreHorizontal, ListPlus, Play, Pause, Music } from 'lucide-react'
-import type { CrateList, TrackList } from '../types/crates'
+import { MoreHorizontal, ListPlus, Play, Pause, Music, Download } from 'lucide-react'
+import { useToast } from '../hooks/useToast'
+import { useCrates, useTracks, useDeleteTrack, useAddTracksToCrate, useRemoveTracksFromCrate } from '../hooks/useQueries'
 
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
   const current = queue[index]
-  const [q, setQ] = useState('')
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCrate, setSelectedCrate] = useState<string>(() => searchParams.get('crate') || 'all')
-  const [tracks, setTracks] = useState<TrackList>({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-  const [loadingCrates, setLoadingCrates] = useState(true)
-  const [loadingTracks, setLoadingTracks] = useState(true)
   const [showCrateDropdown, setShowCrateDropdown] = useState(false)
   const [trackMenuOpen, setTrackMenuOpen] = useState<string | null>(null)
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
   const [draggingTrackIds, setDraggingTrackIds] = useState<Set<string>>(new Set())
 
-  // Fetch crates
-  const fetchCrates = async () => {
-    try {
-      setLoadingCrates(true)
-      const { data } = await cratesApi.list()
-      setCrates(normalizeCrateList(data))
-    } catch (error) {
-      console.error('Failed to fetch crates:', error)
-      setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoadingCrates(false)
-    }
-  }
+  // Debounced search state
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  // Fetch tracks based on selected crate
-  const fetchTracks = useMemo(() => async () => {
-    try {
-      setLoadingTracks(true)
-      let data
-      if (selectedCrate === 'unsorted') {
-        const params: UnsortedParams = { q: q || undefined }
-        const response = await tracksApi.getUnsorted(params)
-        data = response.data
-      } else if (selectedCrate && selectedCrate !== 'all') {
-        const response = await api.get('/api/tracks', {
-          params: { q: q || undefined, playlist_id: selectedCrate }
-        })
-        data = response.data
-      } else {
-        const response = await api.get('/api/tracks', { params: { q: q || undefined } })
-        data = response.data
-      }
-
-      // Ensure data has the expected structure, fallback to empty tracks if not
-      if (data && data.tracks && Array.isArray(data.tracks)) {
-        setTracks(data)
-      } else {
-        // If the response doesn't have the expected structure, set empty tracks
-        setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
-      }
-    } catch (error) {
-      console.error('Failed to fetch tracks:', error)
-      // On error, set empty tracks to prevent the map error
-      setTracks({ tracks: [], total: 0, limit: 20, offset: 0, has_next: false })
-    } finally {
-      setLoadingTracks(false)
-    }
-  }, [q, selectedCrate])
-
+  // Debounce search input
   useEffect(() => {
-    fetchCrates()
-  }, [])
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // React Query hooks
+  const { data: crates, isLoading: loadingCrates } = useCrates()
+  const { data: tracks, isLoading: loadingTracks } = useTracks({
+    q: debouncedSearch || undefined,
+    selectedCrate,
+  })
+
+  // Mutations
+  const deleteTrackMutation = useDeleteTrack()
+  const addTracksMutation = useAddTracksToCrate()
+  const removeTracksMutation = useRemoveTracksFromCrate()
 
   // Keep selected crate in sync with URL (?crate=<id>|unsorted or none => all)
   useEffect(() => {
@@ -82,7 +49,7 @@ export function LibraryPage() {
     if (next !== selectedCrate) {
       setSelectedCrate(next)
     }
-  }, [searchParams])
+  }, [searchParams, selectedCrate])
 
   // Update player context when crate changes
   useEffect(() => {
@@ -93,7 +60,6 @@ export function LibraryPage() {
   const [lastUrlCrate, setLastUrlCrate] = useState<string | null>(searchParams.get('crate'))
   useEffect(() => {
     const curr = searchParams.get('crate') || 'all'
-    // If selectedCrate differs from the URL and the URL hasn't just changed, update URL
     if (selectedCrate !== curr && lastUrlCrate === curr) {
       const next = new URLSearchParams(searchParams)
       if (selectedCrate && selectedCrate !== 'all') next.set('crate', selectedCrate)
@@ -101,20 +67,7 @@ export function LibraryPage() {
       setSearchParams(next, { replace: true })
     }
     setLastUrlCrate(searchParams.get('crate'))
-  }, [selectedCrate, searchParams])
-
-  useEffect(() => {
-    fetchTracks()
-  }, [fetchTracks])
-
-  // Listen for track updates from drag and drop
-  useEffect(() => {
-    const handleTracksUpdated = () => {
-      fetchTracks()
-    }
-    window.addEventListener('tracks:updated', handleTracksUpdated)
-    return () => window.removeEventListener('tracks:updated', handleTracksUpdated)
-  }, [fetchTracks])
+  }, [selectedCrate, searchParams, lastUrlCrate, setSearchParams])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -131,65 +84,68 @@ export function LibraryPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showCrateDropdown, trackMenuOpen])
 
-
-  async function onDelete(id: string) {
-    await api.delete(`/api/tracks/${id}`)
-    await fetchTracks()
-  }
-
-  async function addTrackToCrate(trackId: string, crateId: string) {
+  // Memoized handlers to prevent unnecessary re-renders
+  const onDelete = useCallback(async (id: string) => {
     try {
-      await cratesApi.addTracks(crateId, [trackId])
-      await fetchTracks()
-      await fetchCrates()
+      await deleteTrackMutation.mutateAsync(id)
+      toast.success('Track deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete track:', error)
+      toast.error('Failed to delete track')
+    }
+  }, [deleteTrackMutation, toast])
+
+  const addTrackToCrate = useCallback(async (trackId: string, crateId: string) => {
+    try {
+      await addTracksMutation.mutateAsync({ crateId, trackIds: [trackId] })
+      toast.success('Track added to crate')
     } catch (error) {
       console.error('Failed to add track to crate:', error)
+      toast.error('Failed to add track to crate')
     }
-  }
+  }, [addTracksMutation, toast])
 
-  async function removeTrackFromCrate(trackId: string, crateId: string) {
+  const removeTrackFromCrate = useCallback(async (trackId: string, crateId: string) => {
     try {
-      await cratesApi.removeTracks(crateId, [trackId])
-      await fetchTracks()
-      await fetchCrates()
+      await removeTracksMutation.mutateAsync({ crateId, trackIds: [trackId] })
+      toast.success('Track removed from crate')
     } catch (error) {
       console.error('Failed to remove track from crate:', error)
+      toast.error('Failed to remove track from crate')
     }
-  }
+  }, [removeTracksMutation, toast])
 
-  // Bulk actions
-  async function bulkAddToCrate(crateId: string) {
+  const bulkAddToCrate = useCallback(async (crateId: string) => {
     try {
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await cratesApi.addTracks(crateId, ids)
+      await addTracksMutation.mutateAsync({ crateId, trackIds: ids })
       setSelectedTrackIds(new Set())
-      await fetchTracks()
-      await fetchCrates()
+      toast.success(`Added ${ids.length} track${ids.length > 1 ? 's' : ''} to crate`)
     } catch (error) {
       console.error('Failed bulk add:', error)
+      toast.error('Failed to add tracks to crate')
     }
-  }
+  }, [selectedTrackIds, addTracksMutation, toast])
 
-  async function bulkRemoveFromCurrentCrate() {
+  const bulkRemoveFromCurrentCrate = useCallback(async () => {
     try {
       if (!selectedCrate || selectedCrate === 'all' || selectedCrate === 'unsorted') return
       const ids = Array.from(selectedTrackIds)
       if (ids.length === 0) return
-      await cratesApi.removeTracks(selectedCrate, ids)
+      await removeTracksMutation.mutateAsync({ crateId: selectedCrate, trackIds: ids })
       setSelectedTrackIds(new Set())
-      await fetchTracks()
-      await fetchCrates()
+      toast.success(`Removed ${ids.length} track${ids.length > 1 ? 's' : ''} from crate`)
     } catch (error) {
       console.error('Failed bulk remove:', error)
+      toast.error('Failed to remove tracks from crate')
     }
-  }
+  }, [selectedCrate, selectedTrackIds, removeTracksMutation, toast])
 
-  function toggleSelected(id: string, shiftKey: boolean = false, index: number) {
-    if (shiftKey && lastClickedIndex !== null) {
-      // Shift-click: select range
-      const start = Math.min(lastClickedIndex, index)
-      const end = Math.max(lastClickedIndex, index)
+  const toggleSelected = useCallback((id: string, shiftKey: boolean = false, idx: number) => {
+    if (shiftKey && lastClickedIndex !== null && tracks?.tracks) {
+      const start = Math.min(lastClickedIndex, idx)
+      const end = Math.max(lastClickedIndex, idx)
       const rangeIds = tracks.tracks.slice(start, end + 1).map(t => t.id)
       setSelectedTrackIds((prev) => {
         const next = new Set(prev)
@@ -197,7 +153,6 @@ export function LibraryPage() {
         return next
       })
     } else {
-      // Regular click: toggle single
       setSelectedTrackIds((prev) => {
         const next = new Set(prev)
         if (next.has(id)) next.delete(id)
@@ -205,50 +160,61 @@ export function LibraryPage() {
         return next
       })
     }
-    setLastClickedIndex(index)
-  }
+    setLastClickedIndex(idx)
+  }, [lastClickedIndex, tracks?.tracks])
 
-  function clearSelection() { 
+  const clearSelection = useCallback(() => {
     setSelectedTrackIds(new Set())
     setLastClickedIndex(null)
-  }
+  }, [])
 
-  function formatDuration(totalSeconds?: number) {
+  const formatDuration = useCallback((totalSeconds?: number) => {
     if (!totalSeconds || totalSeconds <= 0) return '—'
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = Math.floor(totalSeconds % 60)
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
+  }, [])
 
-  // Drag handlers
-  function handleDragStart(e: React.DragEvent, trackId: string) {
-    // Prevent drag if clicking on interactive elements
+  const handleDragStart = useCallback((e: React.DragEvent, trackId: string) => {
     const target = e.target as HTMLElement
     if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button')) {
       e.preventDefault()
       return
     }
 
-    const tracksToDrag = selectedTrackIds.has(trackId) 
-      ? Array.from(selectedTrackIds) 
+    const tracksToDrag = selectedTrackIds.has(trackId)
+      ? Array.from(selectedTrackIds)
       : [trackId]
-    
+
     setDraggingTrackIds(new Set(tracksToDrag))
     e.dataTransfer.effectAllowed = 'copy'
     e.dataTransfer.setData('application/json', JSON.stringify({ trackIds: tracksToDrag }))
-  }
+  }, [selectedTrackIds])
 
-  function handleDragEnd() {
+  const handleDragEnd = useCallback(() => {
     setDraggingTrackIds(new Set())
-  }
+  }, [])
 
-  // selected crate is controlled by the URL and sidebar links
+  // Get the current crate name for display
+  const currentCrateName = useMemo(() => {
+    if (!selectedCrate || selectedCrate === 'all') return 'Your Library'
+    if (selectedCrate === 'unsorted') return 'Unsorted'
+    const crate = crates?.crates?.find(c => c.id === selectedCrate)
+    return crate?.name || 'Your Library'
+  }, [selectedCrate, crates?.crates])
+
+  const currentCrateDescription = useMemo(() => {
+    if (!selectedCrate || selectedCrate === 'all') return 'All your music in one place'
+    if (selectedCrate === 'unsorted') return 'Tracks not assigned to any crate'
+    const crate = crates?.crates?.find(c => c.id === selectedCrate)
+    return crate?.description || 'Browse your music'
+  }, [selectedCrate, crates?.crates])
 
   return (
     <div className="space-y-6 overflow-visible">
       <div>
-        <h1 className="text-2xl font-bold">Your Library</h1>
-        <p className="text-[#A1A1A1] mt-1">All your music in one place</p>
+        <h1 className="text-2xl font-bold">{currentCrateName}</h1>
+        <p className="text-[#A1A1A1] mt-1">{currentCrateDescription}</p>
       </div>
 
       {/* Bulk selection toolbar */}
@@ -264,7 +230,7 @@ export function LibraryPage() {
                 {loadingCrates ? (
                   <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
                 ) : (
-                  crates.crates?.filter(c => !c.is_default).map((c) => (
+                  crates?.crates?.filter(c => !c.is_default).map((c) => (
                     <button
                       key={c.id}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A]"
@@ -288,12 +254,19 @@ export function LibraryPage() {
         {/* Search Input */}
         <div className="flex items-center gap-3 flex-1">
           <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search your library"
             className="input flex-1"
           />
-          <button className="btn btn-primary" onClick={fetchTracks}>Search</button>
+          {searchInput && (
+            <button
+              className="btn"
+              onClick={() => setSearchInput('')}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -303,9 +276,9 @@ export function LibraryPage() {
         <div className="px-4 py-2 text-xs uppercase tracking-wide text-[#A1A1A1] grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 border-b border-[#2A2A2A] min-w-[800px]">
           <input
             type="checkbox"
-            checked={tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
+            checked={tracks?.tracks && tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
             onChange={(e) => {
-              if (e.target.checked) setSelectedTrackIds(new Set(tracks.tracks.map(t => t.id)))
+              if (e.target.checked && tracks?.tracks) setSelectedTrackIds(new Set(tracks.tracks.map(t => t.id)))
               else clearSelection()
             }}
           />
@@ -324,14 +297,14 @@ export function LibraryPage() {
         )}
 
         {/* Empty state */}
-        {!loadingTracks && tracks.tracks.length === 0 && (
+        {!loadingTracks && (!tracks?.tracks || tracks.tracks.length === 0) && (
           <div className="px-4 py-8 text-center">
             <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
             <div className="text-lg font-semibold mb-2">No tracks found</div>
             <div className="text-[#A1A1A1] mb-4">
-              {q ? 'Try adjusting your search query' : 'Upload some music to get started'}
+              {searchInput ? 'Try adjusting your search query' : 'Upload some music to get started'}
             </div>
-            {!q && (
+            {!searchInput && (
               <Link to="/upload" className="btn btn-primary inline-flex">
                 Upload Music
               </Link>
@@ -340,14 +313,14 @@ export function LibraryPage() {
         )}
 
         {/* Rows */}
-        {!loadingTracks && Array.isArray(tracks.tracks) && tracks.tracks.map((t, idx) => {
+        {!loadingTracks && tracks?.tracks && tracks.tracks.map((t, idx) => {
           const isCurrent = current?.id === t.id
           const isCurrentAndPlaying = isCurrent && isPlaying
           const isSelected = selectedTrackIds.has(t.id)
           const isDragging = draggingTrackIds.has(t.id)
           return (
-            <div 
-              key={t.id} 
+            <div
+              key={t.id}
               className={`px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px] cursor-move transition-opacity ${isSelected ? 'bg-[#2A2A2A]' : ''} ${isDragging ? 'opacity-50' : ''}`}
               draggable
               onDragStart={(e) => handleDragStart(e, t.id)}
@@ -360,7 +333,7 @@ export function LibraryPage() {
                   e.stopPropagation()
                   toggleSelected(t.id, e.shiftKey, idx)
                 }}
-                onChange={() => {}} // Controlled input
+                onChange={() => { }}
               />
               <div className="min-w-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -405,7 +378,7 @@ export function LibraryPage() {
                     {loadingCrates ? (
                       <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
                     ) : (
-                      crates.crates && crates.crates
+                      crates?.crates && crates.crates
                         .filter(c => !c.is_default)
                         .map((crate) => (
                           <button
@@ -439,6 +412,17 @@ export function LibraryPage() {
                     <div className="border-t border-[#2A2A2A] my-1"></div>
                     <button
                       onClick={() => {
+                        tracksApi.download(t.id, t.original_filename)
+                        setTrackMenuOpen(null)
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
+                    <div className="border-t border-[#2A2A2A] my-1"></div>
+                    <button
+                      onClick={() => {
                         onDelete(t.id)
                         setTrackMenuOpen(null)
                       }}
@@ -457,4 +441,3 @@ export function LibraryPage() {
     </div>
   )
 }
-

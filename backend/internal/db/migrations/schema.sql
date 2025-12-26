@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS playlists (
     name TEXT NOT NULL,
     description TEXT,
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    is_public BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -91,6 +92,8 @@ CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
 -- Playlist indexes
 CREATE INDEX IF NOT EXISTS idx_playlists_owner_default ON playlists(owner_user_id, is_default);
 CREATE INDEX IF NOT EXISTS idx_playlists_owner_created ON playlists(owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_playlists_is_public ON playlists(is_public);
+CREATE INDEX IF NOT EXISTS idx_playlists_public_not_default ON playlists(is_public, is_default);
 
 -- Playlist tracks indexes
 CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist_position ON playlist_tracks(playlist_id, position);

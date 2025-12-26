@@ -1,14 +1,16 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, Plus } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
-import { useEffect, useState } from 'react'
-import { cratesApi, normalizeCrateList } from '../../lib/api'
-import type { CrateList } from '../../types/crates'
+import { useCallback, useEffect, useState } from 'react'
+import { useToast } from '../../hooks/useToast'
+import { useCrates, useAddTracksToCrate } from '../../hooks/useQueries'
 
 export function Layout() {
   const { user, logout } = useAuth()
-  const [crates, setCrates] = useState<CrateList>({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
+  const toast = useToast()
+  const { data: crates } = useCrates()
+  const addTracksMutation = useAddTracksToCrate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [dragOverCrateId, setDragOverCrateId] = useState<string | null>(null)
   const location = useLocation()
@@ -16,50 +18,23 @@ export function Layout() {
   const selectedCrateId = search.get('crate') || search.get('playlist')
 
   useEffect(() => {
-    let mounted = true
-    const load = () =>
-      cratesApi
-        .list()
-        .then(({ data }) => {
-          if (!mounted) return
-          setCrates(normalizeCrateList(data))
-        })
-        .catch(() => {
-          if (!mounted) return
-          setCrates({ crates: [], total: 0, limit: 20, offset: 0, has_next: false })
-        })
-
-    load()
-    const handler = () => load()
-    window.addEventListener('crates:updated', handler)
-    window.addEventListener('playlists:updated', handler)
-    return () => {
-      mounted = false
-      window.removeEventListener('crates:updated', handler)
-      window.removeEventListener('playlists:updated', handler)
-    }
-  }, [location.pathname])
-
-  // Close mobile menu when route changes
-  useEffect(() => {
     setMobileMenuOpen(false)
   }, [location])
 
-  // Drag and drop handlers
-  const handleDragOver = (e: React.DragEvent, crateId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, crateId: string) => {
     e.preventDefault()
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'copy'
     setDragOverCrateId(crateId)
-  }
+  }, [])
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragOverCrateId(null)
-  }
+  }, [])
 
-  const handleDrop = async (e: React.DragEvent, crateId: string) => {
+  const handleDrop = useCallback(async (e: React.DragEvent, crateId: string) => {
     e.preventDefault()
     e.stopPropagation()
     setDragOverCrateId(null)
@@ -69,16 +44,16 @@ export function Layout() {
       if (data) {
         const { trackIds } = JSON.parse(data)
         if (trackIds && Array.isArray(trackIds) && trackIds.length > 0) {
-          await cratesApi.addTracks(crateId, trackIds)
-          // Trigger refresh events
-          window.dispatchEvent(new CustomEvent('crates:updated'))
-          window.dispatchEvent(new CustomEvent('tracks:updated'))
+          await addTracksMutation.mutateAsync({ crateId, trackIds })
+          const count = trackIds.length
+          toast.success(`Added ${count} track${count > 1 ? 's' : ''} to crate`)
         }
       }
     } catch (error) {
       console.error('Failed to add tracks to crate:', error)
+      toast.error('Failed to add tracks to crate')
     }
-  }
+  }, [addTracksMutation, toast])
 
   return (
     <div className="min-h-screen grid grid-rows-[1fr_auto] overflow-visible">
@@ -115,12 +90,13 @@ export function Layout() {
             Library
           </NavLink>
           <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
+          <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
           {user?.role === 'admin' && (
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
           )}
           <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
           <div className="space-y-1">
-            {crates.crates.map((p) => (
+            {crates?.crates.map((p) => (
               <Link
                 key={p.id}
                 to={`/?crate=${p.id}`}
@@ -134,7 +110,7 @@ export function Layout() {
               </Link>
             ))}
             <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><Plus size={16} /></span>
+              <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
               Manage Crates
             </Link>
           </div>
@@ -167,12 +143,13 @@ export function Layout() {
               Library
             </NavLink>
             <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
+            <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
             {user?.role === 'admin' && (
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
             )}
             <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
             <div className="space-y-1">
-              {crates.crates.map((p) => (
+              {crates?.crates.map((p) => (
                 <Link
                   key={p.id}
                   to={`/?crate=${p.id}`}
@@ -186,7 +163,7 @@ export function Layout() {
                 </Link>
               ))}
               <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-                <span className="text-[#1DB954]"><Plus size={16} /></span>
+                <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
                 Manage Crates
               </Link>
             </div>

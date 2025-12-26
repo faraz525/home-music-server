@@ -403,3 +403,92 @@ func GetUnsortedTracksHandler(manager *Manager) gin.HandlerFunc {
 		})
 	}
 }
+
+// GetPublicPlaylistsHandler returns all public playlists
+func GetPublicPlaylistsHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Parse pagination parameters
+		limitStr := c.DefaultQuery("limit", "20")
+		offsetStr := c.DefaultQuery("offset", "0")
+
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > 100 {
+			limit = 20
+		}
+
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		playlists, total, hasNext, err := manager.GetPublicPlaylists(limit, offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "server_error", Message: "Failed to fetch public playlists"},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, imodels.APIResponse{
+			Success: true,
+			Data: map[string]interface{}{
+				"crates":   playlists,
+				"total":    total,
+				"limit":    limit,
+				"offset":   offset,
+				"has_next": hasNext,
+			},
+		})
+	}
+}
+
+// UpdatePlaylistVisibilityHandler updates the visibility of a playlist
+func UpdatePlaylistVisibilityHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get user ID from context
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "unauthorized", Message: "User not authenticated"},
+			})
+			return
+		}
+
+		playlistID := c.Param("id")
+
+		var req struct {
+			IsPublic bool `json:"is_public"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "invalid_request", Message: err.Error()},
+			})
+			return
+		}
+
+		err := manager.UpdatePlaylistVisibility(playlistID, userID.(string), req.IsPublic)
+		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if err.Error() == "playlist not found" {
+				statusCode = http.StatusNotFound
+			} else if err.Error() == "access denied: playlist belongs to another user" ||
+				err.Error() == "unsorted crates cannot be made public" {
+				statusCode = http.StatusForbidden
+			}
+
+			c.JSON(statusCode, imodels.APIResponse{
+				Success: false,
+				Error:   &imodels.APIError{Code: "update_failed", Message: err.Error()},
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, imodels.APIResponse{
+			Success: true,
+			Data:    map[string]string{"message": "Playlist visibility updated successfully"},
+		})
+	}
+}

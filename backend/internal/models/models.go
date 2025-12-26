@@ -7,6 +7,7 @@ type User struct {
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
+	StorageBytes *int64    `json:"storage_bytes,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -91,6 +92,7 @@ type Playlist struct {
 	Name        string    `json:"name"`
 	Description *string   `json:"description,omitempty"`
 	IsDefault   bool      `json:"is_default"`
+	IsPublic    bool      `json:"is_public"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -127,12 +129,14 @@ type PlaylistWithTracks struct {
 type CreatePlaylistRequest struct {
 	Name        string  `json:"name" binding:"required"`
 	Description *string `json:"description,omitempty"`
+	IsPublic    *bool   `json:"is_public,omitempty"`
 }
 
 // UpdatePlaylistRequest represents a request to update a playlist
 type UpdatePlaylistRequest struct {
 	Name        string  `json:"name" binding:"required"`
 	Description *string `json:"description,omitempty"`
+	IsPublic    *bool   `json:"is_public,omitempty"`
 }
 
 // AddTracksToPlaylistRequest represents a request to add tracks to a playlist
@@ -143,4 +147,10 @@ type AddTracksToPlaylistRequest struct {
 // RemoveTracksFromPlaylistRequest represents a request to remove tracks from a playlist
 type RemoveTracksFromPlaylistRequest struct {
 	TrackIDs []string `json:"track_ids" binding:"required"`
+}
+
+// PlaylistWithOwner represents a playlist with owner information for community display
+type PlaylistWithOwner struct {
+	*Playlist
+	OwnerEmail string `json:"owner_email"`
 }
