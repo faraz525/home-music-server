@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe, Disc } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useCallback, useEffect, useState } from 'react'
@@ -56,37 +56,45 @@ export function Layout() {
   }, [addTracksMutation, toast])
 
   return (
-    <div className="min-h-screen grid grid-rows-[1fr_auto] overflow-visible">
+    <div className="min-h-screen grid grid-rows-[1fr_auto] overflow-visible bg-crate-black">
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-[#181818] border-b border-[#2A2A2A] px-4 py-3 flex items-center justify-between z-40">
-        <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
+      <div className="lg:hidden fixed top-0 left-0 right-0 bg-crate-surface/95 backdrop-blur-md border-b border-crate-border px-4 py-3 flex items-center justify-between z-40">
+        <div className="flex items-center gap-2">
+          <Disc className="text-crate-amber" size={24} />
+          <span className="text-xl font-display font-bold text-crate-cream">CrateDrop</span>
+        </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="btn p-2"
+          className="hw-button p-2"
           aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileMenuOpen}
         >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30" onClick={() => setMobileMenuOpen(false)} />
+        <div
+          className="lg:hidden fixed inset-0 bg-crate-black/80 backdrop-blur-sm z-30"
+          onClick={() => setMobileMenuOpen(false)}
+        />
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`lg:hidden fixed top-[57px] left-0 bottom-0 w-64 bg-[#181818] border-r border-[#2A2A2A] p-4 overflow-y-auto z-40 transform transition-transform ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`lg:hidden fixed top-[57px] left-0 bottom-0 w-72 bg-crate-surface border-r border-crate-border p-5 overflow-y-auto z-40 transform transition-transform duration-200 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <nav className="space-y-1">
           <NavLink
             to="/"
             end
             className={({ isActive }) =>
-              `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+              `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive && !selectedCrateId
+                ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+                : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
               }`
             }
           >
-            <span className="text-[#1DB954]"><Library size={18} /></span>
+            <Library size={18} />
             Library
           </NavLink>
           <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
@@ -94,52 +102,80 @@ export function Layout() {
           {user?.role === 'admin' && (
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
           )}
-          <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
+
+          <div className="pt-6 pb-2">
+            <div className="text-xs font-medium text-crate-subtle uppercase tracking-wider px-4">
+              Your Crates
+            </div>
+          </div>
+
           <div className="space-y-1">
             {crates?.crates.map((p) => (
               <Link
                 key={p.id}
                 to={`/?crate=${p.id}`}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-all ${selectedCrateId === p.id
+                  ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+                  : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
+                } ${dragOverCrateId === p.id && p.id !== 'unsorted'
+                  ? 'ring-2 ring-crate-cyan bg-crate-cyan/10'
+                  : ''
+                }`}
                 onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
                 onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
                 onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
               >
-                <span className="text-[#1DB954]"><Folder size={16} /></span>
+                <Folder size={16} className={selectedCrateId === p.id ? 'text-crate-amber' : ''} />
                 <span className="truncate">{p.name}</span>
               </Link>
             ))}
-            <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-              <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
+            <Link
+              to="/crates"
+              className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-crate-subtle hover:text-crate-cream hover:bg-crate-elevated transition-all"
+            >
+              <FolderOpen size={16} />
               Manage Crates
             </Link>
           </div>
         </nav>
-        <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
-        <div className="flex items-center justify-between mt-1">
-          <div className="text-sm truncate">{user?.email}</div>
-          <button className="btn btn-primary" onClick={logout} title="Logout">
-            <LogOut size={16} />
-          </button>
+
+        <div className="mt-8 pt-6 border-t border-crate-border">
+          <div className="text-xs text-crate-subtle mb-2">Signed in as</div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-crate-cream truncate">{user?.email}</div>
+            <button
+              className="btn-ghost p-2 rounded-lg text-crate-muted hover:text-crate-danger"
+              onClick={logout}
+              title="Logout"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 p-3 sm:p-6 pt-20 lg:pt-6 overflow-visible">
+      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 p-4 sm:p-6 pt-20 lg:pt-6 overflow-visible">
         {/* Desktop Sidebar */}
-        <aside className="card p-4 hidden lg:block">
-          <div className="mb-6 flex items-center justify-between">
-            <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
+        <aside className="card p-5 hidden lg:block h-fit sticky top-6">
+          <div className="mb-8 flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-crate-amber/10">
+              <Disc className="text-crate-amber" size={24} />
+            </div>
+            <span className="text-xl font-display font-bold text-crate-cream">CrateDrop</span>
           </div>
+
           <nav className="space-y-1">
             <NavLink
               to="/"
               end
               className={({ isActive }) =>
-                `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive && !selectedCrateId ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+                `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive && !selectedCrateId
+                  ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+                  : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
                 }`
               }
             >
-              <span className="text-[#1DB954]"><Library size={18} /></span>
+              <Library size={18} />
               Library
             </NavLink>
             <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
@@ -147,60 +183,86 @@ export function Layout() {
             {user?.role === 'admin' && (
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
             )}
-            <div className="mt-4 text-xs text-[#A1A1A1] px-3">Crates</div>
-            <div className="space-y-1">
+
+            <div className="pt-6 pb-2">
+              <div className="text-xs font-medium text-crate-subtle uppercase tracking-wider px-4">
+                Your Crates
+              </div>
+            </div>
+
+            <div className="space-y-1 max-h-64 overflow-y-auto">
               {crates?.crates.map((p) => (
                 <Link
                   key={p.id}
                   to={`/?crate=${p.id}`}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${selectedCrateId === p.id ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'} ${dragOverCrateId === p.id && p.id !== 'unsorted' ? 'ring-2 ring-[#1DB954] bg-[#1DB954]/10' : ''}`}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-all ${selectedCrateId === p.id
+                    ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+                    : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
+                  } ${dragOverCrateId === p.id && p.id !== 'unsorted'
+                    ? 'ring-2 ring-crate-cyan bg-crate-cyan/10'
+                    : ''
+                  }`}
                   onDragOver={p.id !== 'unsorted' ? (e) => handleDragOver(e, p.id) : undefined}
                   onDragLeave={p.id !== 'unsorted' ? handleDragLeave : undefined}
                   onDrop={p.id !== 'unsorted' ? (e) => handleDrop(e, p.id) : undefined}
                 >
-                  <span className="text-[#1DB954]"><Folder size={16} /></span>
+                  <Folder size={16} className={selectedCrateId === p.id ? 'text-crate-amber' : ''} />
                   <span className="truncate">{p.name}</span>
                 </Link>
               ))}
-              <Link to="/crates" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#A1A1A1] hover:text-white hover:bg-[#202020]">
-                <span className="text-[#1DB954]"><FolderOpen size={16} /></span>
+              <Link
+                to="/crates"
+                className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-crate-subtle hover:text-crate-cream hover:bg-crate-elevated transition-all"
+              >
+                <FolderOpen size={16} />
                 Manage Crates
               </Link>
             </div>
           </nav>
-          <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
-          <div className="flex items-center justify-between mt-1">
-            <div className="text-sm">{user?.email}</div>
-            <button className="btn btn-primary" onClick={logout} title="Logout">
-              <LogOut size={16} />
-            </button>
+
+          <div className="mt-8 pt-6 border-t border-crate-border">
+            <div className="text-xs text-crate-subtle mb-2">Signed in as</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-crate-cream truncate">{user?.email}</div>
+              <button
+                className="btn-ghost p-2 rounded-lg text-crate-muted hover:text-crate-danger transition-colors"
+                onClick={logout}
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
           </div>
         </aside>
-        <main className="space-y-6 overflow-visible">
+
+        <main className="space-y-6 overflow-visible animate-fade-in">
           <Outlet />
         </main>
       </div>
 
+      {/* Mobile drawer overlay */}
+      <div
+        className={`fixed inset-0 z-40 bg-crate-black/60 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
+
       {/* Mobile drawer */}
-      {(
-        <>
-          <div
-            className={`fixed inset-0 z-40 bg-black/60 transition-opacity duration-200 lg:hidden ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div
-            className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#181818] border-r border-[#2A2A2A] p-4 transform transition-transform duration-200 lg:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <div className="text-xl font-extrabold tracking-tight">CrateDrop</div>
-              <button className="btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
-                <X size={18} />
-              </button>
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-crate-surface border-r border-crate-border p-5 transform transition-transform duration-200 lg:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-crate-amber/10">
+              <Disc className="text-crate-amber" size={24} />
             </div>
-            <SidebarContent user={user} logout={logout} onNavigate={() => setMobileMenuOpen(false)} />
+            <span className="text-xl font-display font-bold text-crate-cream">CrateDrop</span>
           </div>
-        </>
-      )}
+          <button className="hw-button p-2" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+            <X size={18} />
+          </button>
+        </div>
+        <SidebarContent user={user} logout={logout} onNavigate={() => setMobileMenuOpen(false)} />
+      </div>
 
       <PlayerBar />
     </div>
@@ -216,19 +278,21 @@ function SidebarContent({ user, logout, onNavigate }: { user: any; logout: () =>
           <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} onClick={onNavigate} />
         )}
       </nav>
-      <div className="mt-8 text-xs text-[#A1A1A1]">Signed in as</div>
-      <div className="flex items-center justify-between mt-1">
-        <div className="text-sm">{user?.email}</div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            logout()
-            onNavigate?.()
-          }}
-          title="Logout"
-        >
-          <LogOut size={16} />
-        </button>
+      <div className="mt-8 pt-6 border-t border-crate-border">
+        <div className="text-xs text-crate-subtle mb-2">Signed in as</div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-crate-cream">{user?.email}</div>
+          <button
+            className="btn-ghost p-2 rounded-lg text-crate-muted hover:text-crate-danger"
+            onClick={() => {
+              logout()
+              onNavigate?.()
+            }}
+            title="Logout"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </div>
     </>
   )
@@ -240,14 +304,15 @@ function NavItem({ to, label, icon, onClick }: { to: string; label: string; icon
       to={to}
       end
       className={({ isActive }) =>
-        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? 'bg-[#2A2A2A] text-white' : 'text-[#C1C1C1] hover:text-white hover:bg-[#202020]'
+        `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
+          ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+          : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
         }`
       }
       onClick={onClick}
     >
-      <span className="text-[#1DB954]">{icon}</span>
+      {icon}
       {label}
     </NavLink>
   )
 }
-

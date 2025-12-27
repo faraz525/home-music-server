@@ -11,34 +11,208 @@ html, body, #root {
 }
 
 body {
-  background-color: #121212;
-  color: #EDEDED;
+  background-color: #0D0A14;
+  color: #F5F0E8;
+  font-family: 'DM Sans', system-ui, sans-serif;
 }
 
+/* Grain texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: 'Clash Display', system-ui, sans-serif;
+}
+
+/* Base button styles */
 .btn {
-  @apply inline-flex items-center justify-center rounded-full px-4 py-2 font-semibold transition-colors duration-200;
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 font-medium transition-all duration-200 ease-out;
+  @apply bg-crate-elevated border border-crate-border text-crate-cream;
+  @apply hover:bg-crate-border hover:border-crate-subtle active:scale-[0.98];
 }
 
 .btn-primary {
-  @apply bg-[#1DB954] text-black hover:bg-[#1ed760] focus:outline-none focus:ring-2 focus:ring-[#1DB954]/40;
+  @apply bg-crate-amber text-crate-black border-transparent;
+  @apply hover:bg-crate-amberLight hover:shadow-glow;
+  @apply focus:outline-none focus:ring-2 focus:ring-crate-amber/40 focus:ring-offset-2 focus:ring-offset-crate-black;
 }
 
+.btn-ghost {
+  @apply bg-transparent border-transparent text-crate-muted;
+  @apply hover:bg-crate-elevated hover:text-crate-cream;
+}
+
+.btn-danger {
+  @apply bg-crate-danger/10 border-crate-danger/30 text-crate-danger;
+  @apply hover:bg-crate-danger/20 hover:border-crate-danger/50;
+}
+
+/* Card styles */
 .card {
-  @apply bg-[#181818] rounded-xl border border-[#2A2A2A] shadow-glow;
+  @apply bg-crate-surface rounded-2xl border border-crate-border;
+  @apply shadow-card backdrop-blur-sm;
+  transition: all 0.2s ease-out;
 }
 
+.card:hover {
+  @apply border-crate-subtle;
+}
+
+.card-elevated {
+  @apply bg-crate-elevated;
+}
+
+/* Input styles */
 .input {
-  @apply bg-[#181818] border border-[#2A2A2A] rounded-lg px-3 py-2 text-sm placeholder:text-[#7A7A7A] focus:outline-none focus:ring-2 focus:ring-[#1DB954]/30;
+  @apply bg-crate-elevated border border-crate-border rounded-xl px-4 py-2.5;
+  @apply text-crate-cream placeholder:text-crate-subtle;
+  @apply focus:outline-none focus:ring-2 focus:ring-crate-amber/30 focus:border-crate-amber/50;
+  @apply transition-all duration-200;
 }
 
+.input:hover {
+  @apply border-crate-subtle;
+}
+
+/* Link styles */
 .link {
-  @apply text-[#1DB954] hover:underline;
+  @apply text-crate-amber hover:text-crate-amberLight underline-offset-2 hover:underline;
+  @apply transition-colors duration-200;
 }
 
-/* Minor mobile tweaks */
-@media (max-width: 640px) {
-  .card {
-    border-radius: 12px;
+/* Vinyl record animation */
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.vinyl-spinning {
+  animation: vinyl-spin 3s linear infinite;
+}
+
+.vinyl-spinning-slow {
+  animation: vinyl-spin 8s linear infinite;
+}
+
+/* VU meter progress bar */
+.vu-meter {
+  @apply h-1.5 rounded-full overflow-hidden;
+  background: linear-gradient(90deg,
+    rgba(229, 160, 0, 0.1) 0%,
+    rgba(229, 160, 0, 0.2) 100%
+  );
+}
+
+.vu-meter-fill {
+  @apply h-full rounded-full transition-all duration-100;
+  background: linear-gradient(90deg,
+    #E5A000 0%,
+    #FFB82E 70%,
+    #00D4FF 100%
+  );
+  box-shadow: 0 0 10px rgba(229, 160, 0, 0.5);
+}
+
+/* Hardware button style */
+.hw-button {
+  @apply relative inline-flex items-center justify-center;
+  @apply rounded-full p-3 transition-all duration-150;
+  @apply bg-crate-elevated border-2 border-crate-border;
+  @apply hover:border-crate-subtle hover:bg-crate-border;
+  @apply active:scale-95;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hw-button-primary {
+  @apply bg-crate-amber border-crate-amberDark text-crate-black;
+  @apply hover:bg-crate-amberLight hover:border-crate-amber;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 2px 12px rgba(229, 160, 0, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #332E3C;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4A4454;
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(229, 160, 0, 0.3);
+  color: #F5F0E8;
+}
+
+/* Focus visible styling */
+:focus-visible {
+  outline: 2px solid rgba(229, 160, 0, 0.5);
+  outline-offset: 2px;
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  @apply w-4 h-4 rounded bg-crate-elevated border-crate-border;
+  @apply checked:bg-crate-amber checked:border-crate-amber;
+  @apply focus:ring-2 focus:ring-crate-amber/30 focus:ring-offset-0;
+}
+
+/* Staggered animation for lists */
+.stagger-item {
+  animation: slide-up 0.4s ease-out backwards;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0ms; }
+.stagger-item:nth-child(2) { animation-delay: 30ms; }
+.stagger-item:nth-child(3) { animation-delay: 60ms; }
+.stagger-item:nth-child(4) { animation-delay: 90ms; }
+.stagger-item:nth-child(5) { animation-delay: 120ms; }
+.stagger-item:nth-child(6) { animation-delay: 150ms; }
+.stagger-item:nth-child(7) { animation-delay: 180ms; }
+.stagger-item:nth-child(8) { animation-delay: 210ms; }
+.stagger-item:nth-child(9) { animation-delay: 240ms; }
+.stagger-item:nth-child(10) { animation-delay: 270ms; }
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+/* Mobile adjustments */
+@media (max-width: 640px) {
+  .card {
+    @apply rounded-xl;
+  }
+
+  .btn {
+    @apply px-3 py-2;
+  }
+}

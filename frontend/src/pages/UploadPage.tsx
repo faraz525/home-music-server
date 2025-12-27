@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import { api, cratesApi, normalizeCrateList } from '../lib/api'
 import type { Crate, CrateList } from '../types/crates'
-import { Upload, Music, X } from 'lucide-react'
+import { Upload, Music, X, Check, Disc } from 'lucide-react'
 
 export function UploadPage() {
   const [files, setFiles] = useState<File[]>([])
@@ -11,8 +11,8 @@ export function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<{ [key: string]: number }>({})
   const [completed, setCompleted] = useState<Set<string>>(new Set())
+  const [dragActive, setDragActive] = useState(false)
 
-  // Fetch crates
   const fetchCrates = async () => {
     try {
       setLoadingCrates(true)
@@ -36,6 +36,27 @@ export function UploadPage() {
     setFiles(prev => [...prev, ...audioFiles])
   }
 
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true)
+    } else if (e.type === 'dragleave') {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files)
+      const audioFiles = droppedFiles.filter(file => file.type.startsWith('audio/'))
+      setFiles(prev => [...prev, ...audioFiles])
+    }
+  }
+
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index))
   }
@@ -44,7 +65,6 @@ export function UploadPage() {
     const form = new FormData()
     form.append('file', file)
 
-    // Add crate assignment if a crate is selected (not 'unsorted')
     if (selectedCrate && selectedCrate !== 'unsorted') {
       form.append('playlist_id', selectedCrate)
     }
@@ -82,12 +102,9 @@ export function UploadPage() {
     setCompleted(new Set())
 
     try {
-      // Upload files sequentially to avoid overwhelming the server
       for (let i = 0; i < files.length; i++) {
         await uploadFile(files[i], i)
       }
-
-      // Clear files after successful upload
       setFiles([])
       setCompleted(new Set())
     } finally {
@@ -105,30 +122,42 @@ export function UploadPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Upload Music</h1>
-        <p className="text-[#A1A1A1] mt-1">Upload songs to your library and organize them into crates</p>
+        <h1 className="text-3xl font-display font-bold text-crate-cream">Upload Music</h1>
+        <p className="text-crate-muted mt-1">Upload songs to your library and organize them into crates</p>
       </div>
 
       <div className="card p-6">
         <form onSubmit={handleUpload} className="space-y-6">
           {/* File Selection */}
           <div>
-            <label className="block text-sm font-medium mb-3">Select Files</label>
-            <div className="relative border-2 border-dashed border-[#2A2A2A] rounded-lg p-8 text-center hover:border-[#1DB954] transition-colors" style={{ pointerEvents: 'none' }}>
-              <Upload size={48} className="mx-auto text-[#A1A1A1] mb-4" />
+            <label className="block text-sm font-medium text-crate-cream mb-3">Select Files</label>
+            <div
+              className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all ${dragActive
+                ? 'border-crate-amber bg-crate-amber/5'
+                : 'border-crate-border hover:border-crate-subtle'
+                }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-crate-elevated flex items-center justify-center">
+                <Upload size={28} className={dragActive ? 'text-crate-amber' : 'text-crate-muted'} />
+              </div>
               <div className="space-y-2">
-                <p className="text-lg font-medium">Drop audio files here or click to browse</p>
-                <p className="text-sm text-[#A1A1A1]">Supports MP3, WAV, FLAC, and other audio formats</p>
+                <p className="text-lg font-medium text-crate-cream">
+                  {dragActive ? 'Drop files here' : 'Drop audio files here or click to browse'}
+                </p>
+                <p className="text-sm text-crate-muted">Supports MP3, WAV, FLAC, AAC, and more</p>
               </div>
               <input
                 type="file"
                 multiple
                 accept="audio/*"
                 onChange={handleFileSelect}
-                onClick={(e) => e.stopPropagation()}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                style={{ pointerEvents: 'auto' }}
               />
             </div>
           </div>
@@ -136,39 +165,53 @@ export function UploadPage() {
           {/* File List */}
           {files.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-3">Selected Files ({files.length})</label>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
+              <label className="block text-sm font-medium text-crate-cream mb-3">
+                Selected Files ({files.length})
+              </label>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
                 {files.map((file, index) => {
                   const fileKey = `${file.name}-${index}`
                   const uploadProgress = progress[fileKey]
                   const isCompleted = completed.has(fileKey)
 
                   return (
-                    <div key={index} className="flex items-center gap-3 p-3 bg-[#1A1A1A] rounded-lg">
-                      <Music size={20} className="text-[#1DB954] flex-shrink-0" />
+                    <div
+                      key={index}
+                      className={`stagger-item flex items-center gap-3 p-4 rounded-xl transition-colors ${isCompleted ? 'bg-crate-success/5 border border-crate-success/20' : 'bg-crate-elevated'
+                        }`}
+                      style={{ animationDelay: `${index * 30}ms` }}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isCompleted ? 'bg-crate-success/20' : 'bg-crate-amber/10'
+                        }`}>
+                        {isCompleted ? (
+                          <Check size={18} className="text-crate-success" />
+                        ) : (
+                          <Music size={18} className="text-crate-amber" />
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <div className="truncate font-medium">{file.name}</div>
-                        <div className="text-sm text-[#A1A1A1]">{formatFileSize(file.size)}</div>
+                        <div className="truncate font-medium text-crate-cream">{file.name}</div>
+                        <div className="text-sm text-crate-muted">{formatFileSize(file.size)}</div>
                         {uploadProgress !== undefined && !isCompleted && (
-                          <div className="mt-1">
-                            <div className="w-full bg-[#2A2A2A] rounded-full h-2">
+                          <div className="mt-2">
+                            <div className="vu-meter">
                               <div
-                                className="bg-[#1DB954] h-2 rounded-full transition-all duration-300"
+                                className="vu-meter-fill"
                                 style={{ width: `${uploadProgress}%` }}
                               />
                             </div>
-                            <div className="text-xs text-[#A1A1A1] mt-1">{uploadProgress}% uploaded</div>
+                            <div className="text-xs text-crate-muted mt-1">{uploadProgress}% uploaded</div>
                           </div>
                         )}
                         {isCompleted && (
-                          <div className="text-sm text-green-400 mt-1">✓ Uploaded successfully</div>
+                          <div className="text-sm text-crate-success mt-1">Uploaded successfully</div>
                         )}
                       </div>
                       {!uploading && (
                         <button
                           type="button"
                           onClick={() => removeFile(index)}
-                          className="p-1 hover:bg-[#2A2A2A] rounded"
+                          className="p-2 rounded-lg hover:bg-crate-border text-crate-muted hover:text-crate-cream transition-colors"
                         >
                           <X size={16} />
                         </button>
@@ -182,7 +225,7 @@ export function UploadPage() {
 
           {/* Crate Selection */}
           <div>
-            <label className="block text-sm font-medium mb-3">Add to Crate (Optional)</label>
+            <label className="block text-sm font-medium text-crate-cream mb-3">Add to Crate (Optional)</label>
             <select
               value={selectedCrate}
               onChange={(e) => setSelectedCrate(e.target.value)}
@@ -200,32 +243,51 @@ export function UploadPage() {
                 ))
               )}
             </select>
-            <p className="text-xs text-[#A1A1A1] mt-1">
+            <p className="text-xs text-crate-subtle mt-2">
               Files will be added to the selected crate. If no crate is selected, they'll go to the unsorted collection.
             </p>
           </div>
 
           {/* Upload Button */}
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-2">
             <button
               type="submit"
               disabled={files.length === 0 || uploading}
-              className="btn btn-primary px-8 py-3"
+              className="btn btn-primary px-8"
             >
-              {uploading ? 'Uploading...' : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+              {uploading ? (
+                <span className="flex items-center gap-2">
+                  <Disc className="vinyl-spinning" size={18} />
+                  Uploading...
+                </span>
+              ) : (
+                `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`
+              )}
             </button>
           </div>
         </form>
       </div>
 
       {/* Help Text */}
-      <div className="card p-4">
-        <h3 className="font-semibold mb-2">Upload Tips</h3>
-        <ul className="text-sm text-[#A1A1A1] space-y-1">
-          <li>• You can upload multiple files at once by selecting them or dragging and dropping</li>
-          <li>• Supported formats: MP3, WAV, FLAC, AAC, OGG, and more</li>
-          <li>• Files without crate assignment will appear in the "Unsorted" collection</li>
-          <li>• You can organize uploaded files into crates from the Library page</li>
+      <div className="card p-5">
+        <h3 className="font-display font-semibold text-crate-cream mb-3">Upload Tips</h3>
+        <ul className="text-sm text-crate-muted space-y-2">
+          <li className="flex items-start gap-2">
+            <span className="text-crate-amber">•</span>
+            You can upload multiple files at once by selecting them or dragging and dropping
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-crate-amber">•</span>
+            Supported formats: MP3, WAV, FLAC, AAC, OGG, and more
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-crate-amber">•</span>
+            Files without crate assignment will appear in the "Unsorted" collection
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-crate-amber">•</span>
+            You can organize uploaded files into crates from the Library page
+          </li>
         </ul>
       </div>
     </div>
