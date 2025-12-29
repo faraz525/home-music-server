@@ -2,9 +2,29 @@ import { tracksApi } from '../lib/api'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
-import { MoreHorizontal, ListPlus, Play, Pause, Music, Download } from 'lucide-react'
+import { MoreHorizontal, ListPlus, Play, Pause, Music, Download, Disc, Search, X } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useCrates, useTracks, useDeleteTrack, useAddTracksToCrate, useRemoveTracksFromCrate } from '../hooks/useQueries'
+
+function MiniVinyl({ spinning = false }: { spinning?: boolean }) {
+  return (
+    <div className={`w-5 h-5 flex-shrink-0 ${spinning ? 'vinyl-spinning' : ''}`}>
+      <div
+        className="w-full h-full rounded-full"
+        style={{
+          background: `radial-gradient(circle at 50% 50%,
+            #E5A000 0%,
+            #E5A000 25%,
+            #1A171F 26%,
+            #0D0A14 40%,
+            #1A171F 41%,
+            #252130 100%
+          )`,
+        }}
+      />
+    </div>
+  )
+}
 
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
@@ -18,11 +38,9 @@ export function LibraryPage() {
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
   const [draggingTrackIds, setDraggingTrackIds] = useState<Set<string>>(new Set())
 
-  // Debounced search state
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput)
@@ -30,19 +48,16 @@ export function LibraryPage() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // React Query hooks
   const { data: crates, isLoading: loadingCrates } = useCrates()
   const { data: tracks, isLoading: loadingTracks } = useTracks({
     q: debouncedSearch || undefined,
     selectedCrate,
   })
 
-  // Mutations
   const deleteTrackMutation = useDeleteTrack()
   const addTracksMutation = useAddTracksToCrate()
   const removeTracksMutation = useRemoveTracksFromCrate()
 
-  // Keep selected crate in sync with URL (?crate=<id>|unsorted or none => all)
   useEffect(() => {
     const c = searchParams.get('crate')
     const next = c || 'all'
@@ -51,12 +66,10 @@ export function LibraryPage() {
     }
   }, [searchParams, selectedCrate])
 
-  // Update player context when crate changes
   useEffect(() => {
     setCurrentCrate(selectedCrate)
   }, [selectedCrate, setCurrentCrate])
 
-  // Only push to URL if the change originated from in-page actions (not from URL itself)
   const [lastUrlCrate, setLastUrlCrate] = useState<string | null>(searchParams.get('crate'))
   useEffect(() => {
     const curr = searchParams.get('crate') || 'all'
@@ -69,7 +82,6 @@ export function LibraryPage() {
     setLastUrlCrate(searchParams.get('crate'))
   }, [selectedCrate, searchParams, lastUrlCrate, setSearchParams])
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showCrateDropdown && !(event.target as Element).closest('.crate-dropdown')) {
@@ -84,7 +96,6 @@ export function LibraryPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showCrateDropdown, trackMenuOpen])
 
-  // Memoized handlers to prevent unnecessary re-renders
   const onDelete = useCallback(async (id: string) => {
     try {
       await deleteTrackMutation.mutateAsync(id)
@@ -195,7 +206,6 @@ export function LibraryPage() {
     setDraggingTrackIds(new Set())
   }, [])
 
-  // Get the current crate name for display
   const currentCrateName = useMemo(() => {
     if (!selectedCrate || selectedCrate === 'all') return 'Your Library'
     if (selectedCrate === 'unsorted') return 'Unsorted'
@@ -212,28 +222,38 @@ export function LibraryPage() {
 
   return (
     <div className="space-y-6 overflow-visible">
-      <div>
-        <h1 className="text-2xl font-bold">{currentCrateName}</h1>
-        <p className="text-[#A1A1A1] mt-1">{currentCrateDescription}</p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-crate-cream">{currentCrateName}</h1>
+          <p className="text-crate-muted mt-1">{currentCrateDescription}</p>
+        </div>
+        {tracks?.tracks && tracks.tracks.length > 0 && (
+          <div className="text-sm text-crate-subtle">
+            {tracks.tracks.length} track{tracks.tracks.length !== 1 ? 's' : ''}
+          </div>
+        )}
       </div>
 
       {/* Bulk selection toolbar */}
       {selectedTrackIds.size > 0 && (
-        <div className="card p-3 flex flex-wrap items-center gap-3">
-          <div className="text-sm">{selectedTrackIds.size} selected</div>
+        <div className="card p-4 flex flex-wrap items-center gap-3 border-crate-amber/30 bg-crate-amber/5">
+          <div className="text-sm font-medium text-crate-amber">
+            {selectedTrackIds.size} selected
+          </div>
           <div className="relative">
             <button className="btn btn-primary" onClick={() => setShowCrateDropdown(!showCrateDropdown)}>
               Add to crate
             </button>
             {showCrateDropdown && (
-              <div className="crate-dropdown absolute top-full mt-1 w-56 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-[9999]">
+              <div className="crate-dropdown absolute top-full mt-2 w-56 bg-crate-elevated rounded-xl shadow-elevated border border-crate-border py-2 z-[9999]">
                 {loadingCrates ? (
-                  <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
+                  <div className="px-4 py-2 text-sm text-crate-muted">Loading crates...</div>
                 ) : (
                   crates?.crates?.filter(c => !c.is_default).map((c) => (
                     <button
                       key={c.id}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A]"
+                      className="w-full text-left px-4 py-2.5 text-sm text-crate-cream hover:bg-crate-border transition-colors"
                       onClick={() => { bulkAddToCrate(c.id); setShowCrateDropdown(false) }}
                     >
                       {c.name}
@@ -244,36 +264,37 @@ export function LibraryPage() {
             )}
           </div>
           {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
-            <button className="btn" onClick={bulkRemoveFromCurrentCrate}>Remove from this crate</button>
+            <button className="btn btn-danger" onClick={bulkRemoveFromCurrentCrate}>
+              Remove from crate
+            </button>
           )}
-          <button className="btn" onClick={clearSelection}>Clear selection</button>
+          <button className="btn" onClick={clearSelection}>Clear</button>
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        {/* Search Input */}
-        <div className="flex items-center gap-3 flex-1">
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search your library"
-            className="input flex-1"
-          />
-          {searchInput && (
-            <button
-              className="btn"
-              onClick={() => setSearchInput('')}
-            >
-              Clear
-            </button>
-          )}
-        </div>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-crate-subtle" size={18} />
+        <input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search your library..."
+          className="input w-full pl-11 pr-10"
+        />
+        {searchInput && (
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-crate-muted hover:text-crate-cream transition-colors"
+            onClick={() => setSearchInput('')}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
-
-      <div className="card p-0">
-        {/* Header row */}
-        <div className="px-4 py-2 text-xs uppercase tracking-wide text-[#A1A1A1] grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 border-b border-[#2A2A2A] min-w-[800px]">
+      {/* Track list */}
+      <div className="card overflow-hidden">
+        {/* Header row - hidden on mobile */}
+        <div className="hidden sm:grid px-4 py-3 text-xs uppercase tracking-wider text-crate-subtle grid-cols-[28px_1fr_1fr_100px_60px_40px] items-center gap-3 border-b border-crate-border bg-crate-elevated/50">
           <input
             type="checkbox"
             checked={tracks?.tracks && tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
@@ -281,51 +302,89 @@ export function LibraryPage() {
               if (e.target.checked && tracks?.tracks) setSelectedTrackIds(new Set(tracks.tracks.map(t => t.id)))
               else clearSelection()
             }}
+            className="justify-self-center"
           />
-          <div className="col-span-1">Title</div>
+          <div>Title</div>
           <div>Album</div>
-          <div className="text-right pr-4">Date added</div>
-          <div className="text-right">Duration</div>
+          <div className="text-right">Added</div>
+          <div className="text-right">Time</div>
           <div></div>
         </div>
 
         {/* Loading state */}
         {loadingTracks && (
-          <div className="px-4 py-8 text-center text-[#A1A1A1]">
-            Loading tracks...
+          <div className="px-4 py-12 text-center">
+            <Disc className="mx-auto text-crate-amber vinyl-spinning-slow mb-4" size={48} />
+            <div className="text-crate-muted">Loading tracks...</div>
           </div>
         )}
 
         {/* Empty state */}
         {!loadingTracks && (!tracks?.tracks || tracks.tracks.length === 0) && (
-          <div className="px-4 py-8 text-center">
-            <Music size={48} className="mx-auto text-[#A1A1A1] mb-4" />
-            <div className="text-lg font-semibold mb-2">No tracks found</div>
-            <div className="text-[#A1A1A1] mb-4">
-              {searchInput ? 'Try adjusting your search query' : 'Upload some music to get started'}
+          <div className="px-4 py-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-crate-elevated flex items-center justify-center">
+              <Music size={32} className="text-crate-subtle" />
             </div>
+            <h3 className="text-lg font-display font-semibold text-crate-cream mb-2">No tracks found</h3>
+            <p className="text-crate-muted mb-6">
+              {searchInput ? 'Try adjusting your search query' : 'Upload some music to get started'}
+            </p>
             {!searchInput && (
-              <Link to="/upload" className="btn btn-primary inline-flex">
+              <Link to="/upload" className="btn btn-primary">
                 Upload Music
               </Link>
             )}
           </div>
         )}
 
-        {/* Rows */}
+        {/* Track rows */}
         {!loadingTracks && tracks?.tracks && tracks.tracks.map((t, idx) => {
           const isCurrent = current?.id === t.id
           const isCurrentAndPlaying = isCurrent && isPlaying
           const isSelected = selectedTrackIds.has(t.id)
           const isDragging = draggingTrackIds.has(t.id)
+
           return (
             <div
               key={t.id}
-              className={`px-4 py-2 grid grid-cols-[24px_1fr_1fr_120px_60px_32px] items-center gap-3 hover:bg-[#1A1A1A] min-w-[800px] cursor-move transition-opacity ${isSelected ? 'bg-[#2A2A2A]' : ''} ${isDragging ? 'opacity-50' : ''}`}
+              className={`stagger-item group px-4 py-3 grid grid-cols-[1fr_auto] sm:grid-cols-[28px_1fr_1fr_100px_60px_40px] items-center gap-3 border-b border-crate-border/50 hover:bg-crate-elevated/50 transition-all cursor-move ${isSelected ? 'bg-crate-amber/5 border-l-2 border-l-crate-amber' : ''} ${isDragging ? 'opacity-50' : ''} ${isCurrent ? 'bg-crate-elevated/30' : ''}`}
               draggable
               onDragStart={(e) => handleDragStart(e, t.id)}
               onDragEnd={handleDragEnd}
             >
+              {/* Mobile: Combined title/artist with play button */}
+              <div className="sm:hidden flex items-center gap-3 min-w-0">
+                <button
+                  className={`hw-button p-2 flex-shrink-0 ${isCurrentAndPlaying ? 'hw-button-primary' : ''}`}
+                  title={isCurrentAndPlaying ? 'Pause' : 'Play'}
+                  onClick={() => {
+                    if (isCurrent) toggle()
+                    else {
+                      const fallbackFromFilename = (() => {
+                        const name = t.original_filename || ''
+                        const noExt = name.includes('.') ? name.substring(0, name.lastIndexOf('.')) : name
+                        return noExt.slice(0, 60)
+                      })()
+                      const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
+                      const displayArtist = t.artist || 'Unknown artist'
+                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
+                    }
+                  }}
+                >
+                  {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                </button>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {isCurrent && <MiniVinyl spinning={isPlaying} />}
+                    <span className={`truncate text-sm ${isCurrent ? 'text-crate-amber font-medium' : 'text-crate-cream'}`}>
+                      {t.title || t.original_filename}
+                    </span>
+                  </div>
+                  <div className="text-xs text-crate-muted truncate">{t.artist || 'Unknown Artist'}</div>
+                </div>
+              </div>
+
+              {/* Desktop: Checkbox */}
               <input
                 type="checkbox"
                 checked={isSelected}
@@ -334,49 +393,69 @@ export function LibraryPage() {
                   toggleSelected(t.id, e.shiftKey, idx)
                 }}
                 onChange={() => { }}
+                className="hidden sm:block justify-self-center"
               />
-              <div className="min-w-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <button
-                    className="btn btn-primary p-2 flex items-center justify-center"
-                    title={isCurrentAndPlaying ? 'Pause' : 'Play'}
-                    onClick={() => {
-                      if (isCurrent) toggle()
-                      else {
-                        const fallbackFromFilename = (() => {
-                          const name = t.original_filename || ''
-                          const noExt = name.includes('.') ? name.substring(0, name.lastIndexOf('.')) : name
-                          return noExt.slice(0, 60)
-                        })()
-                        const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
-                        const displayArtist = t.artist || 'Unknown artist'
-                        play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
-                      }
-                    }}
-                  >
-                    {isCurrentAndPlaying ? <Pause /> : <Play />}
-                  </button>
-                  <div className="min-w-0">
-                    <div className="truncate">{t.title || t.original_filename}</div>
-                    <div className="text-sm text-[#A1A1A1] truncate">{t.artist || 'Unknown Artist'}</div>
+
+              {/* Desktop: Title/Artist with play */}
+              <div className="hidden sm:flex items-center gap-3 min-w-0">
+                <button
+                  className={`hw-button p-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${isCurrentAndPlaying ? 'hw-button-primary opacity-100' : ''}`}
+                  title={isCurrentAndPlaying ? 'Pause' : 'Play'}
+                  onClick={() => {
+                    if (isCurrent) toggle()
+                    else {
+                      const fallbackFromFilename = (() => {
+                        const name = t.original_filename || ''
+                        const noExt = name.includes('.') ? name.substring(0, name.lastIndexOf('.')) : name
+                        return noExt.slice(0, 60)
+                      })()
+                      const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
+                      const displayArtist = t.artist || 'Unknown artist'
+                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
+                    }
+                  }}
+                >
+                  {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                </button>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    {isCurrent && <MiniVinyl spinning={isPlaying} />}
+                    <span className={`truncate ${isCurrent ? 'text-crate-amber font-medium' : 'text-crate-cream'}`}>
+                      {t.title || t.original_filename}
+                    </span>
                   </div>
+                  <div className="text-sm text-crate-muted truncate">{t.artist || 'Unknown Artist'}</div>
                 </div>
               </div>
-              <div className="truncate">{t.album || '—'}</div>
-              <div className="text-right pr-4 text-sm text-[#A1A1A1]">{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</div>
-              <div className="text-right text-sm text-[#A1A1A1]">{formatDuration(t.duration_seconds)}</div>
+
+              {/* Desktop: Album */}
+              <div className="hidden sm:block truncate text-sm text-crate-muted">{t.album || '—'}</div>
+
+              {/* Desktop: Date added */}
+              <div className="hidden sm:block text-right text-sm text-crate-subtle">
+                {t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}
+              </div>
+
+              {/* Desktop: Duration */}
+              <div className="hidden sm:block text-right text-sm text-crate-subtle tabular-nums">
+                {formatDuration(t.duration_seconds)}
+              </div>
+
+              {/* More menu */}
               <div className="relative justify-self-end">
                 <button
-                  className="btn p-2"
+                  className="btn-ghost p-2 rounded-lg"
                   onClick={() => setTrackMenuOpen(trackMenuOpen === t.id ? null : t.id)}
                 >
                   <MoreHorizontal size={16} />
                 </button>
                 {trackMenuOpen === t.id && (
-                  <div className="track-menu absolute right-0 top-full mt-1 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-[#2A2A2A] py-1 z-50">
-                    <div className="px-3 py-2 text-xs font-semibold text-[#A1A1A1] border-b border-[#2A2A2A]">Add to Crate</div>
+                  <div className="track-menu absolute right-0 top-full mt-2 w-52 bg-crate-elevated rounded-xl shadow-elevated border border-crate-border py-2 z-50">
+                    <div className="px-4 py-2 text-xs font-medium text-crate-subtle border-b border-crate-border mb-1">
+                      Add to Crate
+                    </div>
                     {loadingCrates ? (
-                      <div className="px-3 py-2 text-sm text-[#A1A1A1]">Loading crates...</div>
+                      <div className="px-4 py-2 text-sm text-crate-muted">Loading crates...</div>
                     ) : (
                       crates?.crates && crates.crates
                         .filter(c => !c.is_default)
@@ -387,46 +466,46 @@ export function LibraryPage() {
                               addTrackToCrate(t.id, crate.id)
                               setTrackMenuOpen(null)
                             }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-sm text-crate-cream hover:bg-crate-border flex items-center gap-2 transition-colors"
                           >
-                            <ListPlus size={14} />
+                            <ListPlus size={14} className="text-crate-muted" />
                             {crate.name}
                           </button>
                         ))
                     )}
                     {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
                       <>
-                        <div className="border-t border-[#2A2A2A] my-1"></div>
+                        <div className="border-t border-crate-border my-1" />
                         <button
                           onClick={() => {
                             removeTrackFromCrate(t.id, selectedCrate)
                             setTrackMenuOpen(null)
                           }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] text-red-400 flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-sm text-crate-danger hover:bg-crate-danger/10 flex items-center gap-2 transition-colors"
                         >
                           <ListPlus size={14} className="rotate-45" />
                           Remove from Crate
                         </button>
                       </>
                     )}
-                    <div className="border-t border-[#2A2A2A] my-1"></div>
+                    <div className="border-t border-crate-border my-1" />
                     <button
                       onClick={() => {
                         tracksApi.download(t.id, t.original_filename)
                         setTrackMenuOpen(null)
                       }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] flex items-center gap-2"
+                      className="w-full text-left px-4 py-2 text-sm text-crate-cream hover:bg-crate-border flex items-center gap-2 transition-colors"
                     >
-                      <Download size={14} />
+                      <Download size={14} className="text-crate-muted" />
                       Download
                     </button>
-                    <div className="border-t border-[#2A2A2A] my-1"></div>
+                    <div className="border-t border-crate-border my-1" />
                     <button
                       onClick={() => {
                         onDelete(t.id)
                         setTrackMenuOpen(null)
                       }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#2A2A2A] text-red-400 flex items-center gap-2"
+                      className="w-full text-left px-4 py-2 text-sm text-crate-danger hover:bg-crate-danger/10 flex items-center gap-2 transition-colors"
                     >
                       <MoreHorizontal size={14} />
                       Delete Track

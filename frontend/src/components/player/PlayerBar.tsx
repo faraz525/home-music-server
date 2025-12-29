@@ -2,6 +2,68 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { usePlayer } from '../../state/player'
 
+function VinylRecord({ isPlaying, size = 48 }: { isPlaying: boolean; size?: number }) {
+  return (
+    <div
+      className={`relative flex-shrink-0 ${isPlaying ? 'vinyl-spinning' : ''}`}
+      style={{ width: size, height: size }}
+    >
+      {/* Outer ring */}
+      <div
+        className="absolute inset-0 rounded-full bg-crate-black"
+        style={{
+          background: `
+            radial-gradient(circle at 50% 50%,
+              #1A171F 0%,
+              #0D0A14 15%,
+              #1A171F 16%,
+              #0D0A14 30%,
+              #1A171F 31%,
+              #0D0A14 45%,
+              #1A171F 46%,
+              #0D0A14 60%,
+              #252130 61%,
+              #1A171F 100%
+            )
+          `,
+          boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+        }}
+      />
+      {/* Center label */}
+      <div
+        className="absolute rounded-full bg-crate-amber"
+        style={{
+          width: size * 0.35,
+          height: size * 0.35,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          boxShadow: isPlaying ? '0 0 12px rgba(229, 160, 0, 0.4)' : 'none',
+        }}
+      >
+        {/* Center hole */}
+        <div
+          className="absolute rounded-full bg-crate-black"
+          style={{
+            width: size * 0.08,
+            height: size * 0.08,
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
+      </div>
+      {/* Shine effect */}
+      <div
+        className="absolute inset-0 rounded-full pointer-events-none"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%)',
+        }}
+      />
+    </div>
+  )
+}
+
 export function PlayerBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const barRef = useRef<HTMLDivElement | null>(null)
@@ -16,7 +78,6 @@ export function PlayerBar() {
   useEffect(() => {
     if (!audioRef.current) return
     const el = audioRef.current
-    // Throttle progress updates to ~4 times per second (250ms) to reduce re-renders
     const onTime = () => {
       const now = Date.now()
       if (now - lastProgressUpdateRef.current >= 250) {
@@ -26,23 +87,19 @@ export function PlayerBar() {
     }
     const onLoaded = () => setDuration(isFinite(el.duration) ? el.duration : 0)
     const onEnded = () => {
-      // Auto-play next track when current track ends
       next()
     }
     const onError = async () => {
       try {
         await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
       } catch (_) {
-        // ignore
       }
-      // Retry loading the current source
       try {
         el.load()
         if (isPlaying) {
           await el.play().catch(() => {})
         }
       } catch (_) {
-        // ignore
       }
     }
     el.addEventListener('timeupdate', onTime)
@@ -60,27 +117,21 @@ export function PlayerBar() {
   useEffect(() => {
     if (!audioRef.current) return
     const el = audioRef.current
-    
-    // Handle play/pause state changes - preserve currentTime
+
     if (isPlaying) {
-      // Resume playback from current position
       el.play().catch(() => {})
     } else {
       el.pause()
     }
   }, [isPlaying])
 
-  // Handle track changes when index changes (next/prev navigation)
   useEffect(() => {
     if (!audioRef.current || !current) return
     const el = audioRef.current
-    
-    // Only reload if the track actually changed (not just play/pause state)
+
     const trackChanged = prevTrackIdRef.current !== current.id
     if (trackChanged) {
-      // Set duration immediately from database if available (bypasses browser metadata wait)
       if (current.durationSeconds && current.durationSeconds > 0) {
-        // Use Object.defineProperty to set duration before browser reads it
         Object.defineProperty(el, 'duration', {
           value: current.durationSeconds,
           writable: true,
@@ -88,19 +139,15 @@ export function PlayerBar() {
         })
         setDuration(current.durationSeconds)
       }
-      
-      // Load the new track when current changes
+
       el.load()
-      // Reset progress for new track
       setProgress(0)
       prevTrackIdRef.current = current.id
-      
-      // Auto-play if we were playing before - AGGRESSIVE playback strategy
+
       if (isPlaying) {
         let playbackStarted = false
         const tryPlay = () => {
           if (playbackStarted) return
-          // Check if we have ANY data (HAVE_CURRENT_DATA = 2)
           if (el.readyState >= 2) {
             el.play().catch(() => {})
             playbackStarted = true
@@ -108,18 +155,15 @@ export function PlayerBar() {
           }
           return false
         }
-        
-        // Immediate check
+
         if (tryPlay()) return
-        
-        // Aggressive polling - check readyState every 50ms
+
         const pollInterval = setInterval(() => {
           if (tryPlay()) {
             clearInterval(pollInterval)
           }
         }, 50)
-        
-        // Event-based triggers (backup)
+
         const onLoadedData = () => {
           if (tryPlay()) {
             clearInterval(pollInterval)
@@ -128,9 +172,8 @@ export function PlayerBar() {
             el.removeEventListener('loadedmetadata', onLoadedMetadata)
           }
         }
-        
+
         const onLoadedMetadata = () => {
-          // Browser found metadata, set duration if not already set
           if (!current.durationSeconds && isFinite(el.duration)) {
             setDuration(el.duration)
           }
@@ -141,7 +184,7 @@ export function PlayerBar() {
             el.removeEventListener('loadedmetadata', onLoadedMetadata)
           }
         }
-        
+
         const onCanPlay = () => {
           if (tryPlay()) {
             clearInterval(pollInterval)
@@ -150,12 +193,11 @@ export function PlayerBar() {
             el.removeEventListener('loadedmetadata', onLoadedMetadata)
           }
         }
-        
+
         el.addEventListener('loadeddata', onLoadedData)
         el.addEventListener('loadedmetadata', onLoadedMetadata)
         el.addEventListener('canplay', onCanPlay)
-        
-        // Cleanup after 10 seconds (should have started by then)
+
         setTimeout(() => {
           clearInterval(pollInterval)
           el.removeEventListener('loadeddata', onLoadedData)
@@ -164,7 +206,7 @@ export function PlayerBar() {
         }, 10000)
       }
     }
-  }, [current, isPlaying]) // Track both, but only reload on track change
+  }, [current, isPlaying])
 
   const pct = useMemo(() => (duration ? (progress / duration) * 100 : 0), [progress, duration])
 
@@ -197,7 +239,6 @@ export function PlayerBar() {
       setDragging(false)
     }
 
-    // Prevent text selection during drag
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'grabbing'
 
@@ -220,54 +261,135 @@ export function PlayerBar() {
   }
 
   return (
-    <div className="sticky bottom-0 w-full border-t border-[#2A2A2A] bg-[#121212] z-30">
-      <div className="mx-auto max-w-6xl px-3 sm:px-6 py-2 sm:py-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-        <button className="btn" title="Previous" onClick={() => prev()}>
-          <SkipBack />
-        </button>
-        <button className="btn btn-primary" title={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
-          {isPlaying ? <Pause /> : <Play />}
-        </button>
-        <button className="btn" title="Next" onClick={() => next()}>
-          <SkipForward />
-        </button>
+    <div className="sticky bottom-0 w-full border-t border-crate-border bg-crate-surface/95 backdrop-blur-md z-30">
+      {/* Ambient glow when playing */}
+      {isPlaying && (
+        <div
+          className="absolute inset-x-0 -top-8 h-8 pointer-events-none"
+          style={{
+            background: 'linear-gradient(to top, rgba(229, 160, 0, 0.08), transparent)',
+          }}
+        />
+      )}
 
-        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 flex-1 min-w-0 w-full sm:w-auto">
-          {/* Mobile: Show track info above controls */}
-          <div className="sm:hidden w-full text-center mb-1">
-            <div className="truncate text-xs">{current?.title || 'Unknown track'}</div>
-            <div className="truncate text-xs text-[#A1A1A1]">{current?.artist || 'Unknown artist'}</div>
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-3 sm:py-4">
+        {/* Mobile layout */}
+        <div className="sm:hidden space-y-3">
+          {/* Track info with vinyl */}
+          <div className="flex items-center gap-3">
+            <VinylRecord isPlaying={isPlaying} size={40} />
+            <div className="flex-1 min-w-0">
+              <div className="truncate text-sm font-medium text-crate-cream">
+                {current?.title || 'No track selected'}
+              </div>
+              <div className="truncate text-xs text-crate-muted">
+                {current?.artist || 'Select a track to play'}
+              </div>
+            </div>
           </div>
-          
-          {/* Desktop: Show track info inline */}
-          <div className="min-w-0 hidden sm:block">
-            <div className="truncate text-sm">{current?.title || 'Unknown track'}</div>
-            <div className="truncate text-xs text-[#A1A1A1]">{current?.artist || 'Unknown artist'}</div>
+
+          {/* Progress bar */}
+          <div className="flex items-center gap-2">
+            <div className="text-xs tabular-nums text-crate-muted w-10 text-right">
+              {formatTime(progress)}
+            </div>
+            <div
+              ref={barRef}
+              className="vu-meter flex-1 cursor-pointer"
+              onClick={onSeek}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                setDragging(true)
+              }}
+            >
+              <div className="vu-meter-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="text-xs tabular-nums text-crate-muted w-10">
+              {formatTime(duration)}
+            </div>
           </div>
-          
-          <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12 text-right">{formatTime(progress)}</div>
-          <div
-            ref={barRef}
-            className="h-1 rounded-full bg-[#2A2A2A] flex-1 cursor-pointer"
-            onClick={onSeek}
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setDragging(true)
-            }}
-          >
-            <div className="h-1 rounded-full bg-[#1DB954]" style={{ width: `${pct}%` }} />
+
+          {/* Transport controls */}
+          <div className="flex items-center justify-center gap-4">
+            <button className="hw-button" title="Previous" onClick={() => prev()}>
+              <SkipBack size={18} />
+            </button>
+            <button
+              className={`hw-button ${isPlaying ? 'hw-button-primary' : ''}`}
+              title={isPlaying ? 'Pause' : 'Play'}
+              onClick={toggle}
+              style={{ padding: '14px' }}
+            >
+              {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
+            </button>
+            <button className="hw-button" title="Next" onClick={() => next()}>
+              <SkipForward size={18} />
+            </button>
           </div>
-          <div className="text-xs tabular-nums text-[#A1A1A1] w-10 sm:w-12">{formatTime(duration)}</div>
         </div>
 
-        <audio 
-          ref={audioRef} 
-          src={current?.streamUrl} 
-          preload="metadata"
-          crossOrigin="use-credentials"
-        />
+        {/* Desktop layout */}
+        <div className="hidden sm:flex items-center gap-6">
+          {/* Left: Transport controls */}
+          <div className="flex items-center gap-2">
+            <button className="hw-button" title="Previous" onClick={() => prev()}>
+              <SkipBack size={18} />
+            </button>
+            <button
+              className={`hw-button ${isPlaying ? 'hw-button-primary' : ''}`}
+              title={isPlaying ? 'Pause' : 'Play'}
+              onClick={toggle}
+              style={{ padding: '14px' }}
+            >
+              {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
+            </button>
+            <button className="hw-button" title="Next" onClick={() => next()}>
+              <SkipForward size={18} />
+            </button>
+          </div>
+
+          {/* Center: Vinyl + Track info + Progress */}
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <VinylRecord isPlaying={isPlaying} size={48} />
+
+            <div className="min-w-0 w-48">
+              <div className="truncate text-sm font-medium text-crate-cream">
+                {current?.title || 'No track selected'}
+              </div>
+              <div className="truncate text-xs text-crate-muted">
+                {current?.artist || 'Select a track to play'}
+              </div>
+            </div>
+
+            <div className="text-xs tabular-nums text-crate-muted w-12 text-right">
+              {formatTime(progress)}
+            </div>
+
+            <div
+              ref={barRef}
+              className="vu-meter flex-1 cursor-pointer"
+              onClick={onSeek}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                setDragging(true)
+              }}
+            >
+              <div className="vu-meter-fill" style={{ width: `${pct}%` }} />
+            </div>
+
+            <div className="text-xs tabular-nums text-crate-muted w-12">
+              {formatTime(duration)}
+            </div>
+          </div>
+        </div>
       </div>
+
+      <audio
+        ref={audioRef}
+        src={current?.streamUrl}
+        preload="metadata"
+        crossOrigin="use-credentials"
+      />
     </div>
   )
 }
-
