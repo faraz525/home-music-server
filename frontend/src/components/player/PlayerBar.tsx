@@ -223,18 +223,19 @@ export function PlayerBar() {
   useEffect(() => {
     if (!dragging) return
 
-    function handleMove(ev: PointerEvent) {
+    function handleMove(ev: PointerEvent | TouchEvent) {
       ev.preventDefault()
       if (!audioRef.current || !barRef.current || !duration) return
       const rect = barRef.current.getBoundingClientRect()
-      const x = Math.min(Math.max(ev.clientX - rect.left, 0), rect.width)
+      const clientX = 'touches' in ev ? ev.touches[0]?.clientX ?? 0 : ev.clientX
+      const x = Math.min(Math.max(clientX - rect.left, 0), rect.width)
       const ratio = rect.width ? x / rect.width : 0
       const nextTime = ratio * duration
       audioRef.current.currentTime = nextTime
       setProgress(nextTime)
     }
 
-    function handleUp(ev: PointerEvent) {
+    function handleUp(ev: PointerEvent | TouchEvent) {
       ev.preventDefault()
       setDragging(false)
     }
@@ -244,10 +245,14 @@ export function PlayerBar() {
 
     window.addEventListener('pointermove', handleMove, { passive: false })
     window.addEventListener('pointerup', handleUp, { passive: false })
+    window.addEventListener('touchmove', handleMove, { passive: false })
+    window.addEventListener('touchend', handleUp, { passive: false })
 
     return () => {
       window.removeEventListener('pointermove', handleMove)
       window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('touchmove', handleMove)
+      window.removeEventListener('touchend', handleUp)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
     }
@@ -288,21 +293,38 @@ export function PlayerBar() {
             </div>
           </div>
 
-          {/* Progress bar */}
+          {/* Progress bar - larger touch target on mobile */}
           <div className="flex items-center gap-2">
             <div className="text-xs tabular-nums text-crate-muted w-10 text-right">
               {formatTime(progress)}
             </div>
             <div
               ref={barRef}
-              className="vu-meter flex-1 cursor-pointer"
+              className="flex-1 cursor-pointer py-3 -my-3 touch-none"
               onClick={onSeek}
               onPointerDown={(e) => {
                 e.preventDefault()
                 setDragging(true)
               }}
+              onTouchStart={(e) => {
+                e.preventDefault()
+                setDragging(true)
+                const touch = e.touches[0]
+                if (barRef.current && duration) {
+                  const rect = barRef.current.getBoundingClientRect()
+                  const x = Math.min(Math.max(touch.clientX - rect.left, 0), rect.width)
+                  const ratio = rect.width ? x / rect.width : 0
+                  const nextTime = ratio * duration
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = nextTime
+                    setProgress(nextTime)
+                  }
+                }
+              }}
             >
-              <div className="vu-meter-fill" style={{ width: `${pct}%` }} />
+              <div className="vu-meter">
+                <div className="vu-meter-fill" style={{ width: `${pct}%` }} />
+              </div>
             </div>
             <div className="text-xs tabular-nums text-crate-muted w-10">
               {formatTime(duration)}

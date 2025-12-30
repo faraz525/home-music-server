@@ -261,7 +261,7 @@ export function Layout() {
             <X size={18} />
           </button>
         </div>
-        <SidebarContent user={user} logout={logout} onNavigate={() => setMobileMenuOpen(false)} />
+        <SidebarContent user={user} logout={logout} onNavigate={() => setMobileMenuOpen(false)} crates={crates} selectedCrateId={selectedCrateId} />
       </div>
 
       <PlayerBar />
@@ -269,19 +269,58 @@ export function Layout() {
   )
 }
 
-function SidebarContent({ user, logout, onNavigate }: { user: any; logout: () => void; onNavigate?: () => void }) {
+function SidebarContent({ user, logout, onNavigate, crates, selectedCrateId }: {
+  user: any;
+  logout: () => void;
+  onNavigate?: () => void;
+  crates?: { crates: Array<{ id: string; name: string }> };
+  selectedCrateId?: string | null;
+}) {
   return (
     <>
       <nav className="space-y-1">
         <NavItem to="/" label="Library" icon={<Library size={18} />} onClick={onNavigate} />
+        <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} onClick={onNavigate} />
+        <NavItem to="/community" label="Community" icon={<Globe size={18} />} onClick={onNavigate} />
         {user?.role === 'admin' && (
           <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} onClick={onNavigate} />
         )}
+
+        <div className="pt-6 pb-2">
+          <div className="text-xs font-medium text-crate-subtle uppercase tracking-wider px-4">
+            Your Crates
+          </div>
+        </div>
+
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {crates?.crates.map((p) => (
+            <Link
+              key={p.id}
+              to={`/?crate=${p.id}`}
+              onClick={onNavigate}
+              className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-all ${selectedCrateId === p.id
+                ? 'bg-crate-amber/10 text-crate-amber border border-crate-amber/20'
+                : 'text-crate-muted hover:text-crate-cream hover:bg-crate-elevated'
+              }`}
+            >
+              <Folder size={16} className={selectedCrateId === p.id ? 'text-crate-amber' : ''} />
+              <span className="truncate">{p.name}</span>
+            </Link>
+          ))}
+          <Link
+            to="/crates"
+            onClick={onNavigate}
+            className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-crate-subtle hover:text-crate-cream hover:bg-crate-elevated transition-all"
+          >
+            <FolderOpen size={16} />
+            Manage Crates
+          </Link>
+        </div>
       </nav>
       <div className="mt-8 pt-6 border-t border-crate-border">
         <div className="text-xs text-crate-subtle mb-2">Signed in as</div>
         <div className="flex items-center justify-between">
-          <div className="text-sm text-crate-cream">{user?.email}</div>
+          <div className="text-sm text-crate-cream truncate">{user?.email}</div>
           <button
             className="btn-ghost p-2 rounded-lg text-crate-muted hover:text-crate-danger"
             onClick={() => {
