@@ -223,36 +223,32 @@ export function PlayerBar() {
   useEffect(() => {
     if (!dragging) return
 
-    function handleMove(ev: PointerEvent | TouchEvent) {
-      ev.preventDefault()
+    function handleMove(ev: PointerEvent) {
       if (!audioRef.current || !barRef.current || !duration) return
       const rect = barRef.current.getBoundingClientRect()
-      const clientX = 'touches' in ev ? ev.touches[0]?.clientX ?? 0 : ev.clientX
-      const x = Math.min(Math.max(clientX - rect.left, 0), rect.width)
+      const x = Math.min(Math.max(ev.clientX - rect.left, 0), rect.width)
       const ratio = rect.width ? x / rect.width : 0
       const nextTime = ratio * duration
       audioRef.current.currentTime = nextTime
       setProgress(nextTime)
     }
 
-    function handleUp(ev: PointerEvent | TouchEvent) {
-      ev.preventDefault()
+    function handleUp() {
       setDragging(false)
     }
 
     document.body.style.userSelect = 'none'
     document.body.style.cursor = 'grabbing'
 
-    window.addEventListener('pointermove', handleMove, { passive: false })
-    window.addEventListener('pointerup', handleUp, { passive: false })
-    window.addEventListener('touchmove', handleMove, { passive: false })
-    window.addEventListener('touchend', handleUp, { passive: false })
+    // Use pointer events which work for both mouse and touch
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
 
     return () => {
       window.removeEventListener('pointermove', handleMove)
       window.removeEventListener('pointerup', handleUp)
-      window.removeEventListener('touchmove', handleMove)
-      window.removeEventListener('touchend', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
     }
@@ -300,19 +296,15 @@ export function PlayerBar() {
             </div>
             <div
               ref={barRef}
-              className="flex-1 cursor-pointer py-3 -my-3 touch-none"
+              className="flex-1 cursor-pointer py-3 -my-3"
+              style={{ touchAction: 'none' }}
               onClick={onSeek}
               onPointerDown={(e) => {
-                e.preventDefault()
                 setDragging(true)
-              }}
-              onTouchStart={(e) => {
-                e.preventDefault()
-                setDragging(true)
-                const touch = e.touches[0]
+                // Immediately seek to clicked position
                 if (barRef.current && duration) {
                   const rect = barRef.current.getBoundingClientRect()
-                  const x = Math.min(Math.max(touch.clientX - rect.left, 0), rect.width)
+                  const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width)
                   const ratio = rect.width ? x / rect.width : 0
                   const nextTime = ratio * duration
                   if (audioRef.current) {
