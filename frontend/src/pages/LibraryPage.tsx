@@ -274,12 +274,12 @@ export function LibraryPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-crate-subtle" size={18} />
+        <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-crate-subtle pointer-events-none" size={18} />
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search your library..."
-          className="input w-full pl-11 pr-10"
+          placeholder="Search..."
+          className="input w-full pl-10 sm:pl-11 pr-10"
         />
         {searchInput && (
           <button
@@ -292,7 +292,7 @@ export function LibraryPage() {
       </div>
 
       {/* Track list */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-visible">
         {/* Header row - hidden on mobile */}
         <div className="hidden sm:grid px-4 py-3 text-xs uppercase tracking-wider text-crate-subtle grid-cols-[28px_1fr_1fr_100px_60px_40px] items-center gap-3 border-b border-crate-border bg-crate-elevated/50">
           <input
@@ -450,67 +450,74 @@ export function LibraryPage() {
                   <MoreHorizontal size={16} />
                 </button>
                 {trackMenuOpen === t.id && (
-                  <div className="track-menu absolute right-0 top-full mt-2 w-52 bg-crate-elevated rounded-xl shadow-elevated border border-crate-border py-2 z-50">
-                    <div className="px-4 py-2 text-xs font-medium text-crate-subtle border-b border-crate-border mb-1">
-                      Add to Crate
-                    </div>
-                    {loadingCrates ? (
-                      <div className="px-4 py-2 text-sm text-crate-muted">Loading crates...</div>
-                    ) : (
-                      crates?.crates && crates.crates
-                        .filter(c => !c.is_default)
-                        .map((crate) => (
+                  <>
+                    {/* Mobile: Full screen overlay with bottom sheet style menu */}
+                    <div className="sm:hidden fixed inset-0 bg-crate-black/60 z-[100]" onClick={() => setTrackMenuOpen(null)} />
+                    <div className="track-menu sm:absolute sm:right-0 sm:top-full sm:mt-2 fixed sm:relative bottom-0 left-0 right-0 sm:bottom-auto sm:left-auto w-full sm:w-52 bg-crate-elevated sm:rounded-xl rounded-t-2xl shadow-elevated border border-crate-border py-2 z-[101] max-h-[70vh] overflow-y-auto">
+                      <div className="sm:hidden w-12 h-1 bg-crate-border rounded-full mx-auto my-2" />
+                      <div className="px-4 py-2 text-xs font-medium text-crate-subtle border-b border-crate-border mb-1">
+                        Add to Crate
+                      </div>
+                      {loadingCrates ? (
+                        <div className="px-4 py-2 text-sm text-crate-muted">Loading crates...</div>
+                      ) : (
+                        crates?.crates && crates.crates
+                          .filter(c => !c.is_default)
+                          .map((crate) => (
+                            <button
+                              key={crate.id}
+                              onClick={() => {
+                                addTrackToCrate(t.id, crate.id)
+                                setTrackMenuOpen(null)
+                              }}
+                              className="w-full text-left px-4 py-3 sm:py-2 text-sm text-crate-cream hover:bg-crate-border active:bg-crate-border flex items-center gap-2 transition-colors"
+                            >
+                              <ListPlus size={14} className="text-crate-muted" />
+                              {crate.name}
+                            </button>
+                          ))
+                      )}
+                      {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
+                        <>
+                          <div className="border-t border-crate-border my-1" />
                           <button
-                            key={crate.id}
                             onClick={() => {
-                              addTrackToCrate(t.id, crate.id)
+                              removeTrackFromCrate(t.id, selectedCrate)
                               setTrackMenuOpen(null)
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-crate-cream hover:bg-crate-border flex items-center gap-2 transition-colors"
+                            className="w-full text-left px-4 py-3 sm:py-2 text-sm text-crate-danger hover:bg-crate-danger/10 active:bg-crate-danger/10 flex items-center gap-2 transition-colors"
                           >
-                            <ListPlus size={14} className="text-crate-muted" />
-                            {crate.name}
+                            <ListPlus size={14} className="rotate-45" />
+                            Remove from Crate
                           </button>
-                        ))
-                    )}
-                    {selectedCrate && selectedCrate !== 'all' && selectedCrate !== 'unsorted' && (
-                      <>
-                        <div className="border-t border-crate-border my-1" />
-                        <button
-                          onClick={() => {
-                            removeTrackFromCrate(t.id, selectedCrate)
-                            setTrackMenuOpen(null)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-crate-danger hover:bg-crate-danger/10 flex items-center gap-2 transition-colors"
-                        >
-                          <ListPlus size={14} className="rotate-45" />
-                          Remove from Crate
-                        </button>
-                      </>
-                    )}
-                    <div className="border-t border-crate-border my-1" />
-                    <button
-                      onClick={() => {
-                        tracksApi.download(t.id, t.original_filename)
-                        setTrackMenuOpen(null)
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-crate-cream hover:bg-crate-border flex items-center gap-2 transition-colors"
-                    >
-                      <Download size={14} className="text-crate-muted" />
-                      Download
-                    </button>
-                    <div className="border-t border-crate-border my-1" />
-                    <button
-                      onClick={() => {
-                        onDelete(t.id)
-                        setTrackMenuOpen(null)
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-crate-danger hover:bg-crate-danger/10 flex items-center gap-2 transition-colors"
-                    >
-                      <MoreHorizontal size={14} />
-                      Delete Track
-                    </button>
-                  </div>
+                        </>
+                      )}
+                      <div className="border-t border-crate-border my-1" />
+                      <button
+                        onClick={() => {
+                          tracksApi.download(t.id, t.original_filename)
+                          setTrackMenuOpen(null)
+                        }}
+                        className="w-full text-left px-4 py-3 sm:py-2 text-sm text-crate-cream hover:bg-crate-border active:bg-crate-border flex items-center gap-2 transition-colors"
+                      >
+                        <Download size={14} className="text-crate-muted" />
+                        Download
+                      </button>
+                      <div className="border-t border-crate-border my-1" />
+                      <button
+                        onClick={() => {
+                          onDelete(t.id)
+                          setTrackMenuOpen(null)
+                        }}
+                        className="w-full text-left px-4 py-3 sm:py-2 text-sm text-crate-danger hover:bg-crate-danger/10 active:bg-crate-danger/10 flex items-center gap-2 transition-colors"
+                      >
+                        <MoreHorizontal size={14} />
+                        Delete Track
+                      </button>
+                      {/* Extra padding for safe area on mobile */}
+                      <div className="sm:hidden h-4" />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
