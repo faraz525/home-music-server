@@ -92,3 +92,14 @@ temp/
 *.wma
 data/
 backend/data/
+
+# Editor/IDE configs
+.cursor/
+.vscode/
+.idea/
+
+# Binary files
+backend/server/main
+
+# Working notes
+thoughts/
