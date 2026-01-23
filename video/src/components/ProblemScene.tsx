@@ -4,7 +4,6 @@ import {
   spring,
   useCurrentFrame,
   useVideoConfig,
-  Sequence,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Inter";
 
@@ -131,9 +130,7 @@ export const ProblemScene: React.FC = () => {
 
       <div style={{ display: "flex", flexDirection: "column" }}>
         {problems.map((problem, i) => (
-          <Sequence key={i} from={0} premountFor={fps}>
-            <ProblemItem icon={problem.icon} text={problem.text} index={i} />
-          </Sequence>
+          <ProblemItem key={i} icon={problem.icon} text={problem.text} index={i} />
         ))}
       </div>
     </AbsoluteFill>

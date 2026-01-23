@@ -4,7 +4,6 @@ import {
   spring,
   useCurrentFrame,
   useVideoConfig,
-  Sequence,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Inter";
 
@@ -182,16 +181,15 @@ export const FeatureScene: React.FC<Props> = ({ brandColor, accentColor }) => {
         }}
       >
         {features.map((feature, i) => (
-          <Sequence key={i} from={0} premountFor={fps}>
-            <FeatureCard
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
-              index={i}
-              brandColor={brandColor}
-              accentColor={accentColor}
-            />
-          </Sequence>
+          <FeatureCard
+            key={i}
+            icon={feature.icon}
+            title={feature.title}
+            description={feature.description}
+            index={i}
+            brandColor={brandColor}
+            accentColor={accentColor}
+          />
         ))}
       </div>
     </AbsoluteFill>
