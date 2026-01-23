@@ -61,7 +61,6 @@ func (m *Manager) GetSyncConfig(ctx context.Context) (*SyncConfig, error) {
 
 func (m *Manager) SaveSyncConfig(ctx context.Context, token, ownerUserID string, enabled bool) error {
 	cfg := &SyncConfig{
-		OAuthToken:  &token,
 		OwnerUserID: ownerUserID,
 		Enabled:     enabled,
 	}
@@ -69,6 +68,13 @@ func (m *Manager) SaveSyncConfig(ctx context.Context, token, ownerUserID string,
 	existing, _ := m.repo.GetSyncConfig(ctx)
 	if existing != nil {
 		cfg.PlaylistID = existing.PlaylistID
+		if token == "" {
+			cfg.OAuthToken = existing.OAuthToken
+		} else {
+			cfg.OAuthToken = &token
+		}
+	} else if token != "" {
+		cfg.OAuthToken = &token
 	}
 
 	return m.repo.UpsertSyncConfig(ctx, cfg)

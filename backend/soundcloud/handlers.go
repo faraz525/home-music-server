@@ -43,7 +43,7 @@ func (h *Handlers) GetConfig(c *gin.Context) {
 }
 
 type UpdateConfigRequest struct {
-	OAuthToken  string `json:"oauth_token" binding:"required"`
+	OAuthToken  string `json:"oauth_token"`
 	OwnerUserID string `json:"owner_user_id" binding:"required"`
 	Enabled     bool   `json:"enabled"`
 }
