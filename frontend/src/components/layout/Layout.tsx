@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe, Disc } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe, Disc, Cloud } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useCallback, useEffect, useState } from 'react'
@@ -100,7 +100,10 @@ export function Layout() {
           <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
           <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
           {user?.role === 'admin' && (
-            <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
+            <>
+              <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
+              <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} />
+            </>
           )}
 
           <div className="pt-6 pb-2">
@@ -181,7 +184,10 @@ export function Layout() {
             <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} />
             <NavItem to="/community" label="Community" icon={<Globe size={18} />} />
             {user?.role === 'admin' && (
-              <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
+              <>
+                <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
+                <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} />
+              </>
             )}
 
             <div className="pt-6 pb-2">
@@ -283,7 +289,10 @@ function SidebarContent({ user, logout, onNavigate, crates, selectedCrateId }: {
         <NavItem to="/upload" label="Upload" icon={<UploadCloud size={18} />} onClick={onNavigate} />
         <NavItem to="/community" label="Community" icon={<Globe size={18} />} onClick={onNavigate} />
         {user?.role === 'admin' && (
-          <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} onClick={onNavigate} />
+          <>
+            <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} onClick={onNavigate} />
+            <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} onClick={onNavigate} />
+          </>
         )}
 
         <div className="pt-6 pb-2">

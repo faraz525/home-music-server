@@ -86,11 +86,11 @@ func (d *DB) migrate() error {
 	// Check if is_public column exists in playlists table
 	var columnCount int
 	_ = d.QueryRow(`
-		SELECT COUNT(*) 
-		FROM pragma_table_info('playlists') 
+		SELECT COUNT(*)
+		FROM pragma_table_info('playlists')
 		WHERE name='is_public'
 	`).Scan(&columnCount)
-	
+
 	if columnCount == 0 {
 		// Apply migration to add is_public column
 		migrationSQL, err := migrationsFS.ReadFile("migrations/001_add_is_public.sql")
@@ -99,6 +99,19 @@ func (d *DB) migrate() error {
 		}
 		if _, err := d.Exec(string(migrationSQL)); err != nil {
 			return fmt.Errorf("failed to execute migration 001_add_is_public: %w", err)
+		}
+	}
+
+	// Check if soundcloud_sync_config table exists
+	var scTableCount int
+	_ = d.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='soundcloud_sync_config'").Scan(&scTableCount)
+	if scTableCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/002_add_soundcloud_sync.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 002_add_soundcloud_sync: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 002_add_soundcloud_sync: %w", err)
 		}
 	}
 

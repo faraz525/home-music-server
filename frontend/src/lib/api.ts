@@ -122,3 +122,35 @@ export const tracksApi = {
     document.body.removeChild(link)
   },
 }
+
+// SoundCloud sync API
+export type SoundCloudConfig = {
+  configured: boolean
+  enabled: boolean
+  owner_user_id?: string
+  playlist_id?: string
+  last_sync_at?: string
+}
+
+export type SoundCloudSyncHistory = {
+  id: string
+  started_at: string
+  completed_at?: string
+  tracks_added: number
+  tracks_skipped: number
+  error_message?: string
+}
+
+export const soundcloudApi = {
+  getConfig: () =>
+    api.get<SoundCloudConfig>('/api/soundcloud/config'),
+
+  updateConfig: (data: { oauth_token: string; owner_user_id: string; enabled: boolean }) =>
+    api.put('/api/soundcloud/config', data),
+
+  triggerSync: () =>
+    api.post('/api/soundcloud/sync'),
+
+  getHistory: () =>
+    api.get<{ history: SoundCloudSyncHistory[] }>('/api/soundcloud/history'),
+}

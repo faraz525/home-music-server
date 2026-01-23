@@ -7,6 +7,7 @@ import { CratesPage } from './pages/CratesPage'
 import { CommunityPage } from './pages/CommunityPage'
 import { UploadPage } from './pages/UploadPage'
 import { AdminPage } from './pages/AdminPage'
+import { SoundCloudPage } from './pages/SoundCloudPage'
 import { NotFound } from './pages/NotFound'
 import { AuthProvider, useAuth } from './state/auth'
 
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/crates" element={<CratesPage />} />
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/soundcloud" element={<SoundCloudPage />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

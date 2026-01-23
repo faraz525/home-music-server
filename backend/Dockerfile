@@ -19,10 +19,14 @@ RUN apt-get update \
        tzdata \
        curl \
        libsqlite3-0 \
-    && rm -rf /var/lib/apt/lists/*
+       python3 \
+       python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --break-system-packages yt-dlp
 
 WORKDIR /app
 COPY --from=builder /out/server /app/server
+COPY soundcloud/downloader.py /app/soundcloud/downloader.py
 
 EXPOSE 8080
 VOLUME ["/data"]
