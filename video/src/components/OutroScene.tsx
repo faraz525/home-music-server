@@ -35,7 +35,7 @@ export const OutroScene: React.FC<Props> = ({ colors }) => {
 
   const glowPulse = Math.sin(frame * 0.12) * 0.4 + 0.6;
 
-  const taglineOpacity = interpolate(frame, [fps * 0.6, fps * 1], [0, 1], {
+  const taglineOpacity = interpolate(frame, [fps * 0.8, fps * 1.3], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });

@@ -38,19 +38,19 @@ export const SoundCloudScene: React.FC<Props> = ({ colors }) => {
     config: { damping: 15, stiffness: 70 },
   });
 
-  // Animated sync icon rotation
+  // Animated sync icon rotation - spread over 6 seconds
   const syncRotation = interpolate(
     frame,
-    [fps * 0.8, fps * 1.5, fps * 2.2, fps * 2.9],
+    [fps * 1.2, fps * 2.5, fps * 3.8, fps * 5.0],
     [0, 360, 720, 1080],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.quad) }
   );
 
-  // Track items animation
+  // Track items animation - spread over 6 seconds
   const trackItems = [
-    { title: "Deep House Mix Vol. 3", artist: "DJ Shadow", delay: 1.2 },
-    { title: "Sunset Groove", artist: "Beach Collective", delay: 1.5 },
-    { title: "Bass Culture", artist: "Bass Master", delay: 1.8 },
+    { title: "Deep House Mix Vol. 3", artist: "DJ Shadow", delay: 2.0 },
+    { title: "Sunset Groove", artist: "Beach Collective", delay: 2.6 },
+    { title: "Bass Culture", artist: "Bass Master", delay: 3.2 },
   ];
 
   const isWide = width > height;
@@ -357,7 +357,7 @@ export const SoundCloudScene: React.FC<Props> = ({ colors }) => {
             color: colors.muted,
             fontSize: width * 0.016,
             textAlign: "center",
-            opacity: interpolate(frame, [fps * 2.5, fps * 3], [0, 1], {
+            opacity: interpolate(frame, [fps * 4, fps * 4.5], [0, 1], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             }),

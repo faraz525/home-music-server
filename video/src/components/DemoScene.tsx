@@ -55,7 +55,7 @@ export const DemoScene: React.FC<Props> = ({ colors }) => {
           top: isWide ? 50 : 30,
           left: "50%",
           transform: "translateX(-50%)",
-          opacity: interpolate(frame, [fps * 0.4, fps * 0.8], [0, 1], {
+          opacity: interpolate(frame, [fps * 0.6, fps * 1.2], [0, 1], {
             extrapolateLeft: "clamp",
             extrapolateRight: "clamp",
           }),
@@ -196,7 +196,7 @@ export const DemoScene: React.FC<Props> = ({ colors }) => {
               { title: "Summer Vibes 2024", artist: "Beach Collective", duration: "5:30" },
               { title: "Underground Bass", artist: "Bass Master", duration: "7:22" },
             ].map((track, i) => {
-              const trackDelay = 0.4 + i * 0.12;
+              const trackDelay = 0.6 + i * 0.25;
               const trackProgress = spring({
                 frame: frame - trackDelay * fps,
                 fps,

@@ -34,7 +34,7 @@ const ProblemItem: React.FC<{
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
 
-  const delay = index * 0.4;
+  const delay = index * 0.9;
   const entryProgress = spring({
     frame: frame - delay * fps,
     fps,
@@ -48,7 +48,7 @@ const ProblemItem: React.FC<{
 
   const strikeProgress = interpolate(
     frame,
-    [(delay + 1) * fps, (delay + 1.4) * fps],
+    [(delay + 1.8) * fps, (delay + 2.3) * fps],
     [0, 1],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.quad) }
   );

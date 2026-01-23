@@ -23,7 +23,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="CrateDropPromo"
         component={CrateDropPromo}
-        durationInFrames={540}
+        durationInFrames={900}
         fps={30}
         width={1920}
         height={1080}
@@ -34,7 +34,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="CrateDropPromo-Square"
         component={CrateDropPromo}
-        durationInFrames={540}
+        durationInFrames={900}
         fps={30}
         width={1080}
         height={1080}
