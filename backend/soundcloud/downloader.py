@@ -13,99 +13,142 @@ Requires: yt-dlp, ffmpeg
 import sys
 import json
 import os
+import ssl
+import urllib.request
+import urllib.error
 from pathlib import Path
 
-def download_soundcloud_likes(oauth_token: str, output_dir: str) -> int:
-    """Download SoundCloud likes as MP3 using yt-dlp"""
+# Create SSL context that works on macOS
+ssl_context = ssl.create_default_context()
+try:
+    import certifi
+    ssl_context.load_verify_locations(certifi.where())
+except ImportError:
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+
+def get_soundcloud_likes(oauth_token: str, limit: int = 200) -> list:
+    """Fetch liked tracks using SoundCloud API"""
+
+    # First get user info to get user_id
+    me_url = f"https://api-v2.soundcloud.com/me?oauth_token={oauth_token}"
+
+    try:
+        req = urllib.request.Request(me_url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+            user_data = json.loads(response.read().decode())
+            user_id = user_data.get('id')
+            username = user_data.get('username', 'Unknown')
+            print(f"Authenticated as: {username} (ID: {user_id})")
+    except urllib.error.HTTPError as e:
+        print(f"Failed to authenticate: HTTP {e.code}", file=sys.stderr)
+        if e.code == 401:
+            print("OAuth token may be expired or invalid", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"Failed to get user info: {e}", file=sys.stderr)
+        return []
+
+    # Fetch likes
+    likes_url = f"https://api-v2.soundcloud.com/users/{user_id}/track_likes?limit={limit}&oauth_token={oauth_token}"
+
+    try:
+        req = urllib.request.Request(likes_url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+            likes_data = json.loads(response.read().decode())
+
+        tracks = []
+        for item in likes_data.get('collection', []):
+            track = item.get('track')
+            if track:
+                tracks.append({
+                    'id': track.get('id'),
+                    'title': track.get('title', 'Unknown'),
+                    'artist': track.get('user', {}).get('username', 'Unknown'),
+                    'duration': track.get('duration', 0) // 1000,  # Convert ms to seconds
+                    'permalink_url': track.get('permalink_url'),
+                })
+
+        print(f"Found {len(tracks)} liked tracks")
+        return tracks
+
+    except urllib.error.HTTPError as e:
+        print(f"Failed to fetch likes: HTTP {e.code}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"Failed to fetch likes: {e}", file=sys.stderr)
+        return []
+
+
+def download_tracks(tracks: list, output_dir: str, max_tracks: int = 50) -> list:
+    """Download tracks as MP3 using yt-dlp"""
     try:
         import yt_dlp
     except ImportError:
         print("Error: yt-dlp not installed. Run: pip install yt-dlp", file=sys.stderr)
-        return 1
+        return []
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '320',
-        }],
-        'outtmpl': os.path.join(output_dir, '%(id)s.%(ext)s'),
-        'quiet': False,
-        'no_warnings': False,
-        'extract_flat': False,
-        'ignoreerrors': True,
-        'http_headers': {
-            'Authorization': f'OAuth {oauth_token}'
-        },
-        'cookiesfrombrowser': None,
-    }
-
     manifest = []
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            print(f"Fetching SoundCloud likes...")
+    # Limit number of tracks per sync to avoid overwhelming
+    tracks_to_download = tracks[:max_tracks]
 
-            result = ydl.extract_info(
-                'https://soundcloud.com/you/likes',
-                download=True
-            )
+    for i, track in enumerate(tracks_to_download):
+        url = track.get('permalink_url')
+        if not url:
+            continue
 
-            if result is None:
-                print("No results returned from SoundCloud", file=sys.stderr)
-                write_manifest(output_dir, manifest)
-                return 0
+        track_id = track.get('id')
+        title = track.get('title', 'Unknown')
+        artist = track.get('artist', 'Unknown')
 
-            entries = result.get('entries', [result]) if 'entries' in result else [result]
+        print(f"[{i+1}/{len(tracks_to_download)}] Downloading: {title} by {artist}")
 
-            for entry in entries:
-                if entry is None:
-                    continue
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '320',
+            }],
+            'outtmpl': os.path.join(output_dir, f'{track_id}.%(ext)s'),
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': True,
+        }
 
-                track_id = entry.get('id', '')
-                title = entry.get('title', 'Unknown')
-                uploader = entry.get('uploader', entry.get('artist', 'Unknown'))
-                duration = entry.get('duration', 0)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
-                expected_file = os.path.join(output_dir, f'{track_id}.mp3')
+            # Check if file was downloaded
+            expected_file = os.path.join(output_dir, f'{track_id}.mp3')
+            if os.path.exists(expected_file):
+                manifest.append({
+                    'file_path': expected_file,
+                    'title': title,
+                    'artist': artist,
+                    'duration': track.get('duration', 0),
+                    'soundcloud_id': str(track_id)
+                })
+                print(f"  ✓ Downloaded successfully")
+            else:
+                print(f"  ✗ File not found after download")
 
-                if os.path.exists(expected_file):
-                    manifest.append({
-                        'file_path': expected_file,
-                        'title': title,
-                        'artist': uploader,
-                        'duration': duration or 0,
-                        'soundcloud_id': str(track_id)
-                    })
-                    print(f"  ✓ {title} by {uploader}")
-                else:
-                    for f in os.listdir(output_dir):
-                        if f.startswith(str(track_id)) and f.endswith('.mp3'):
-                            manifest.append({
-                                'file_path': os.path.join(output_dir, f),
-                                'title': title,
-                                'artist': uploader,
-                                'duration': duration or 0,
-                                'soundcloud_id': str(track_id)
-                            })
-                            print(f"  ✓ {title} by {uploader}")
-                            break
+        except Exception as e:
+            print(f"  ✗ Failed: {e}")
+            continue
 
-        write_manifest(output_dir, manifest)
-        print(f"\nDownloaded {len(manifest)} tracks")
-        return 0
-
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        write_manifest(output_dir, manifest)
-        return 1
+    return manifest
 
 
 def write_manifest(output_dir: str, manifest: list):
     """Write manifest.json file"""
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
     manifest_path = os.path.join(output_dir, 'manifest.json')
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2)
@@ -124,7 +167,22 @@ def main():
     oauth_token = sys.argv[1]
     output_dir = sys.argv[2]
 
-    sys.exit(download_soundcloud_likes(oauth_token, output_dir))
+    # Get liked tracks from API
+    tracks = get_soundcloud_likes(oauth_token)
+
+    if not tracks:
+        print("No tracks to download")
+        write_manifest(output_dir, [])
+        sys.exit(0)
+
+    # Download tracks
+    manifest = download_tracks(tracks, output_dir)
+
+    # Write manifest
+    write_manifest(output_dir, manifest)
+
+    print(f"\nCompleted: {len(manifest)} tracks downloaded")
+    sys.exit(0)
 
 
 if __name__ == '__main__':
