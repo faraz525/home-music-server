@@ -153,6 +153,21 @@ export function LibraryPage() {
     }
   }, [selectedCrate, selectedTrackIds, removeTracksMutation, toast])
 
+  const bulkDownload = useCallback(() => {
+    if (!tracks?.tracks) return
+    const selectedTracks = tracks.tracks.filter(t => selectedTrackIds.has(t.id))
+    if (selectedTracks.length === 0) return
+
+    toast.success(`Starting download of ${selectedTracks.length} track${selectedTracks.length > 1 ? 's' : ''}...`)
+
+    // Download tracks with a small delay between each to avoid overwhelming the browser
+    selectedTracks.forEach((track, index) => {
+      setTimeout(() => {
+        tracksApi.download(track.id, track.original_filename)
+      }, index * 300)
+    })
+  }, [tracks?.tracks, selectedTrackIds, toast])
+
   const toggleSelected = useCallback((id: string, shiftKey: boolean = false, idx: number) => {
     if (shiftKey && lastClickedIndex !== null && tracks?.tracks) {
       const start = Math.min(lastClickedIndex, idx)
@@ -268,6 +283,10 @@ export function LibraryPage() {
               Remove from crate
             </button>
           )}
+          <button className="btn flex items-center gap-2" onClick={bulkDownload}>
+            <Download size={16} />
+            Download
+          </button>
           <button className="btn" onClick={clearSelection}>Clear</button>
         </div>
       )}
