@@ -4,77 +4,88 @@ import {
   spring,
   useCurrentFrame,
   useVideoConfig,
+  Easing,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/Inter";
+import { loadFont } from "@remotion/google-fonts/DmSans";
+import type { CrateColors } from "../CrateDropPromo";
 
 const { fontFamily } = loadFont("normal", {
   weights: ["400", "600", "700"],
   subsets: ["latin"],
 });
 
+type Props = {
+  colors: CrateColors;
+};
+
 const problems = [
-  { icon: "☁️", text: "Streaming services disappear tracks" },
-  { icon: "💸", text: "Monthly subscriptions add up" },
-  { icon: "🔒", text: "No control over your library" },
-  { icon: "📡", text: "Need internet for everything" },
+  { icon: "☁️", text: "Streaming services remove your tracks" },
+  { icon: "💸", text: "Monthly subscriptions drain your wallet" },
+  { icon: "🔒", text: "Zero control over your own library" },
+  { icon: "📡", text: "No internet = no music" },
 ];
 
 const ProblemItem: React.FC<{
   icon: string;
   text: string;
   index: number;
-}> = ({ icon, text, index }) => {
+  colors: CrateColors;
+}> = ({ icon, text, index, colors }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
 
-  const delay = index * 0.3;
+  const delay = index * 0.4;
   const entryProgress = spring({
     frame: frame - delay * fps,
     fps,
-    config: { damping: 15, stiffness: 100 },
+    config: { damping: 18, stiffness: 120 },
   });
 
-  const x = interpolate(entryProgress, [0, 1], [-100, 0]);
-  const opacity = interpolate(entryProgress, [0, 1], [0, 1]);
+  const x = interpolate(entryProgress, [0, 1], [-60, 0]);
+  const opacity = interpolate(entryProgress, [0, 1], [0, 1], {
+    easing: Easing.out(Easing.quad),
+  });
 
   const strikeProgress = interpolate(
     frame,
-    [(delay + 0.8) * fps, (delay + 1.1) * fps],
+    [(delay + 1) * fps, (delay + 1.4) * fps],
     [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.quad) }
   );
+
+  const dangerColor = "#FF6B6B";
 
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 24,
+        gap: 28,
         opacity,
         transform: `translateX(${x}px)`,
-        marginBottom: 28,
-        position: "relative",
+        marginBottom: 32,
       }}
     >
       <div
         style={{
-          fontSize: width * 0.035,
-          width: 80,
-          height: 80,
-          background: "rgba(239, 68, 68, 0.15)",
-          borderRadius: 16,
+          fontSize: width * 0.032,
+          width: 72,
+          height: 72,
+          background: `${dangerColor}15`,
+          borderRadius: 18,
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          border: "2px solid rgba(239, 68, 68, 0.3)",
+          border: `2px solid ${dangerColor}30`,
+          flexShrink: 0,
         }}
       >
         {icon}
       </div>
       <p
         style={{
-          fontSize: width * 0.026,
-          color: "#e0e0e0",
+          fontSize: width * 0.024,
+          color: colors.cream,
           fontWeight: 600,
           position: "relative",
         }}
@@ -83,12 +94,13 @@ const ProblemItem: React.FC<{
         <span
           style={{
             position: "absolute",
-            left: 0,
+            left: -4,
             top: "50%",
-            width: `${strikeProgress * 100}%`,
+            width: `calc(${strikeProgress * 100}% + 8px)`,
             height: 3,
-            background: "#ef4444",
+            background: `linear-gradient(90deg, ${dangerColor}, ${dangerColor}80)`,
             transform: "translateY(-50%)",
+            borderRadius: 2,
           }}
         />
       </p>
@@ -96,41 +108,50 @@ const ProblemItem: React.FC<{
   );
 };
 
-export const ProblemScene: React.FC = () => {
+export const ProblemScene: React.FC<Props> = ({ colors }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
 
-  const titleOpacity = interpolate(frame, [0, fps * 0.3], [0, 1], {
-    extrapolateRight: "clamp",
+  const titleProgress = spring({
+    frame,
+    fps,
+    config: { damping: 20, stiffness: 100 },
   });
 
-  const titleY = interpolate(frame, [0, fps * 0.3], [-20, 0], {
-    extrapolateRight: "clamp",
-  });
+  const titleOpacity = interpolate(titleProgress, [0, 1], [0, 1]);
+  const titleY = interpolate(titleProgress, [0, 1], [-30, 0]);
 
   return (
     <AbsoluteFill
       style={{
         fontFamily,
-        padding: "80px 120px",
+        padding: "80px 140px",
+        background: `radial-gradient(ellipse at 30% 30%, ${colors.surface} 0%, ${colors.black} 60%)`,
       }}
     >
       <h2
         style={{
-          fontSize: width * 0.04,
+          fontSize: width * 0.042,
           fontWeight: 700,
-          color: "#ef4444",
-          marginBottom: 60,
+          color: "#FF6B6B",
+          marginBottom: 56,
           opacity: titleOpacity,
           transform: `translateY(${titleY}px)`,
+          textShadow: "0 0 40px rgba(255, 107, 107, 0.3)",
         }}
       >
-        Tired of this?
+        Sound familiar?
       </h2>
 
       <div style={{ display: "flex", flexDirection: "column" }}>
         {problems.map((problem, i) => (
-          <ProblemItem key={i} icon={problem.icon} text={problem.text} index={i} />
+          <ProblemItem
+            key={i}
+            icon={problem.icon}
+            text={problem.text}
+            index={i}
+            colors={colors}
+          />
         ))}
       </div>
     </AbsoluteFill>

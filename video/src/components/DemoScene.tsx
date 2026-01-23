@@ -4,8 +4,10 @@ import {
   spring,
   useCurrentFrame,
   useVideoConfig,
+  Easing,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/Inter";
+import { loadFont } from "@remotion/google-fonts/DmSans";
+import type { CrateColors } from "../CrateDropPromo";
 
 const { fontFamily } = loadFont("normal", {
   weights: ["400", "500", "600", "700"],
@@ -13,29 +15,29 @@ const { fontFamily } = loadFont("normal", {
 });
 
 type Props = {
-  brandColor: string;
+  colors: CrateColors;
 };
 
-export const DemoScene: React.FC<Props> = ({ brandColor }) => {
+export const DemoScene: React.FC<Props> = ({ colors }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
-  const mockupScale = spring({
+  const mockupProgress = spring({
     frame,
     fps,
-    config: { damping: 15, stiffness: 80 },
+    config: { damping: 18, stiffness: 70 },
   });
 
-  const mockupY = interpolate(mockupScale, [0, 1], [50, 0]);
-
-  const scanlineY = interpolate(frame, [0, fps * 2], [0, 100], {
-    extrapolateRight: "extend",
-  }) % 100;
+  const mockupY = interpolate(mockupProgress, [0, 1], [40, 0]);
+  const mockupOpacity = interpolate(mockupProgress, [0, 1], [0, 1]);
 
   const glowPulse = Math.sin(frame * 0.08) * 0.3 + 0.7;
 
   const isWide = width > height;
-  const mockupWidth = isWide ? width * 0.7 : width * 0.9;
+  const mockupWidth = isWide ? width * 0.72 : width * 0.92;
+
+  // VU meter animation
+  const vuLevel = Math.abs(Math.sin(frame * 0.15)) * 0.6 + 0.3;
 
   return (
     <AbsoluteFill
@@ -43,16 +45,17 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
         fontFamily,
         justifyContent: "center",
         alignItems: "center",
+        background: `radial-gradient(ellipse at 50% 60%, ${colors.surface} 0%, ${colors.black} 70%)`,
       }}
     >
       {/* Floating label */}
       <div
         style={{
           position: "absolute",
-          top: isWide ? 60 : 40,
+          top: isWide ? 50 : 30,
           left: "50%",
           transform: "translateX(-50%)",
-          opacity: interpolate(frame, [fps * 0.5, fps], [0, 1], {
+          opacity: interpolate(frame, [fps * 0.4, fps * 0.8], [0, 1], {
             extrapolateLeft: "clamp",
             extrapolateRight: "clamp",
           }),
@@ -60,18 +63,18 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
       >
         <span
           style={{
-            fontSize: width * 0.018,
-            color: brandColor,
+            fontSize: width * 0.015,
+            color: colors.amber,
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.15em",
-            background: `${brandColor}15`,
-            padding: "12px 24px",
+            background: `${colors.amber}15`,
+            padding: "10px 24px",
             borderRadius: 100,
-            border: `1px solid ${brandColor}40`,
+            border: `1px solid ${colors.amber}40`,
           }}
         >
-          Beautiful Interface
+          Clean Interface
         </span>
       </div>
 
@@ -79,22 +82,24 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
       <div
         style={{
           width: mockupWidth,
-          transform: `scale(${mockupScale}) translateY(${mockupY}px)`,
-          boxShadow: `0 40px 100px rgba(0,0,0,0.5), 0 0 ${60 * glowPulse}px ${brandColor}20`,
-          borderRadius: 16,
+          transform: `translateY(${mockupY}px)`,
+          opacity: mockupOpacity,
+          boxShadow: `0 40px 100px rgba(0,0,0,0.6), 0 0 ${60 * glowPulse}px ${colors.amber}10`,
+          borderRadius: 12,
           overflow: "hidden",
-          background: "#1a1a2e",
+          border: `1px solid ${colors.border}`,
         }}
       >
         {/* Browser chrome */}
         <div
           style={{
-            height: 48,
-            background: "#0f0f1a",
+            height: 40,
+            background: colors.elevated,
             display: "flex",
             alignItems: "center",
-            padding: "0 16px",
+            padding: "0 14px",
             gap: 8,
+            borderBottom: `1px solid ${colors.border}`,
           }}
         >
           <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#ff5f57" }} />
@@ -102,17 +107,18 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
           <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#28c840" }} />
           <div
             style={{
-              marginLeft: 16,
+              marginLeft: 12,
               flex: 1,
-              height: 28,
-              background: "#252538",
+              height: 26,
+              background: colors.surface,
               borderRadius: 6,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              border: `1px solid ${colors.border}`,
             }}
           >
-            <span style={{ color: "#6b6b80", fontSize: 13 }}>
+            <span style={{ color: colors.subtle, fontSize: 12 }}>
               cratedrop.local
             </span>
           </div>
@@ -121,47 +127,35 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
         {/* App UI mockup */}
         <div
           style={{
-            height: isWide ? height * 0.5 : height * 0.4,
-            background: "linear-gradient(180deg, #16162a 0%, #1a1a2e 100%)",
+            height: isWide ? height * 0.52 : height * 0.42,
+            background: colors.black,
             position: "relative",
-            overflow: "hidden",
+            display: "flex",
           }}
         >
-          {/* Scan line effect */}
-          <div
-            style={{
-              position: "absolute",
-              top: `${scanlineY}%`,
-              left: 0,
-              width: "100%",
-              height: 2,
-              background: `linear-gradient(90deg, transparent, ${brandColor}40, transparent)`,
-              pointerEvents: "none",
-            }}
-          />
-
           {/* Sidebar */}
           <div
             style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: "18%",
-              background: "#0f0f1a",
-              borderRight: "1px solid #2a2a40",
-              padding: 20,
+              width: "16%",
+              background: colors.surface,
+              borderRight: `1px solid ${colors.border}`,
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             <div
               style={{
-                color: "white",
-                fontSize: 16,
+                color: colors.cream,
+                fontSize: 14,
                 fontWeight: 700,
                 marginBottom: 24,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
               }}
             >
-              🎵 CrateDrop
+              <span style={{ color: colors.amber }}>◉</span> CrateDrop
             </div>
             {["Library", "Crates", "Upload", "Community"].map((item, i) => (
               <div
@@ -170,10 +164,11 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
                   padding: "10px 12px",
                   borderRadius: 8,
                   marginBottom: 4,
-                  background: i === 0 ? `${brandColor}30` : "transparent",
-                  color: i === 0 ? "white" : "#6b6b80",
-                  fontSize: 14,
+                  background: i === 0 ? `${colors.amber}20` : "transparent",
+                  color: i === 0 ? colors.cream : colors.muted,
+                  fontSize: 13,
                   fontWeight: 500,
+                  border: i === 0 ? `1px solid ${colors.amber}30` : "none",
                 }}
               >
                 {item}
@@ -182,16 +177,11 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
           </div>
 
           {/* Main content */}
-          <div
-            style={{
-              marginLeft: "18%",
-              padding: 24,
-            }}
-          >
+          <div style={{ flex: 1, padding: 20 }}>
             <h3
               style={{
-                color: "white",
-                fontSize: 24,
+                color: colors.cream,
+                fontSize: 20,
                 fontWeight: 700,
                 marginBottom: 20,
               }}
@@ -202,23 +192,16 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
             {/* Track list */}
             {[
               { title: "Deep House Mix Vol. 3", artist: "DJ Shadow", duration: "6:42" },
-              { title: "Techno Warehouse", artist: "Producer X", duration: "8:15" },
+              { title: "Techno Warehouse Set", artist: "Producer X", duration: "8:15" },
               { title: "Summer Vibes 2024", artist: "Beach Collective", duration: "5:30" },
               { title: "Underground Bass", artist: "Bass Master", duration: "7:22" },
             ].map((track, i) => {
-              const trackDelay = 0.5 + i * 0.15;
-              const trackOpacity = interpolate(
-                frame,
-                [trackDelay * fps, (trackDelay + 0.3) * fps],
-                [0, 1],
-                { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-              );
-              const trackX = interpolate(
-                frame,
-                [trackDelay * fps, (trackDelay + 0.3) * fps],
-                [20, 0],
-                { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-              );
+              const trackDelay = 0.4 + i * 0.12;
+              const trackProgress = spring({
+                frame: frame - trackDelay * fps,
+                fps,
+                config: { damping: 18, stiffness: 100 },
+              });
 
               return (
                 <div
@@ -226,37 +209,40 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    padding: "12px 16px",
-                    background: i === 0 ? `${brandColor}15` : "transparent",
+                    padding: "12px 14px",
+                    background: i === 0 ? colors.surface : "transparent",
                     borderRadius: 8,
-                    marginBottom: 8,
-                    opacity: trackOpacity,
-                    transform: `translateX(${trackX}px)`,
-                    border: i === 0 ? `1px solid ${brandColor}40` : "1px solid transparent",
+                    marginBottom: 6,
+                    opacity: interpolate(trackProgress, [0, 1], [0, 1]),
+                    transform: `translateX(${interpolate(trackProgress, [0, 1], [15, 0])}px)`,
+                    border: i === 0 ? `1px solid ${colors.amber}30` : `1px solid transparent`,
                   }}
                 >
                   <div
                     style={{
                       width: 36,
                       height: 36,
-                      background: `linear-gradient(135deg, ${brandColor}, #6366f1)`,
+                      background: i === 0
+                        ? `linear-gradient(135deg, ${colors.amber}, ${colors.amberDark})`
+                        : colors.elevated,
                       borderRadius: 6,
                       display: "flex",
                       justifyContent: "center",
                       alignItems: "center",
-                      marginRight: 12,
+                      marginRight: 14,
                       fontSize: 14,
+                      color: i === 0 ? colors.black : colors.muted,
                     }}
                   >
                     {i === 0 ? "▶" : "♪"}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ color: "white", fontSize: 14, fontWeight: 600 }}>
+                    <div style={{ color: colors.cream, fontSize: 14, fontWeight: 600 }}>
                       {track.title}
                     </div>
-                    <div style={{ color: "#6b6b80", fontSize: 12 }}>{track.artist}</div>
+                    <div style={{ color: colors.subtle, fontSize: 12 }}>{track.artist}</div>
                   </div>
-                  <div style={{ color: "#6b6b80", fontSize: 13 }}>{track.duration}</div>
+                  <div style={{ color: colors.subtle, fontSize: 13 }}>{track.duration}</div>
                 </div>
               );
             })}
@@ -270,8 +256,8 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
               left: 0,
               right: 0,
               height: 64,
-              background: "#0f0f1a",
-              borderTop: "1px solid #2a2a40",
+              background: colors.surface,
+              borderTop: `1px solid ${colors.border}`,
               display: "flex",
               alignItems: "center",
               padding: "0 20px",
@@ -281,35 +267,66 @@ export const DemoScene: React.FC<Props> = ({ brandColor }) => {
               style={{
                 width: 44,
                 height: 44,
-                background: `linear-gradient(135deg, ${brandColor}, #6366f1)`,
+                background: `linear-gradient(135deg, ${colors.amber}, ${colors.amberDark})`,
                 borderRadius: 8,
-                marginRight: 12,
+                marginRight: 14,
               }}
             />
             <div style={{ flex: 1 }}>
-              <div style={{ color: "white", fontSize: 13, fontWeight: 600 }}>
+              <div style={{ color: colors.cream, fontSize: 13, fontWeight: 600 }}>
                 Deep House Mix Vol. 3
               </div>
-              <div style={{ color: "#6b6b80", fontSize: 11 }}>DJ Shadow</div>
+              <div style={{ color: colors.subtle, fontSize: 11 }}>DJ Shadow</div>
             </div>
+
+            {/* VU Meter */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 3,
+                height: 30,
+                marginRight: 24,
+              }}
+            >
+              {[0.6, 0.8, 1, 0.7, 0.9, 0.5, 0.8].map((base, i) => {
+                const barHeight = base * vuLevel * 30;
+                const isHigh = barHeight > 20;
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      width: 4,
+                      height: barHeight,
+                      borderRadius: 2,
+                      background: isHigh
+                        ? `linear-gradient(to top, ${colors.amber}, ${colors.cyan})`
+                        : colors.amber,
+                    }}
+                  />
+                );
+              })}
+            </div>
+
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <span style={{ color: "#6b6b80", fontSize: 18 }}>⏮</span>
+              <span style={{ color: colors.muted, fontSize: 16 }}>⏮</span>
               <div
                 style={{
                   width: 40,
                   height: 40,
                   borderRadius: "50%",
-                  background: brandColor,
+                  background: colors.amber,
                   display: "flex",
                   justifyContent: "center",
                   alignItems: "center",
-                  color: "white",
-                  fontSize: 16,
+                  color: colors.black,
+                  fontSize: 14,
+                  boxShadow: `0 0 20px ${colors.amber}40`,
                 }}
               >
                 ▶
               </div>
-              <span style={{ color: "#6b6b80", fontSize: 18 }}>⏭</span>
+              <span style={{ color: colors.muted, fontSize: 16 }}>⏭</span>
             </div>
           </div>
         </div>
