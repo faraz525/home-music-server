@@ -258,6 +258,11 @@ func (m *Manager) OpenFile(ctx context.Context, relativePath string) (storage.Re
 	return m.storage.Open(ctx, relativePath)
 }
 
+// ResolveFullPath exposes storage path resolution for download with metadata
+func (m *Manager) ResolveFullPath(relativePath string) (string, bool) {
+	return m.storage.ResolveFullPath(relativePath)
+}
+
 // GetTracks retrieves tracks for a user with pagination
 func (m *Manager) GetTracks(ctx context.Context, userID string, limit, offset int) (*imodels.TrackList, error) {
 	tracks, err := m.repo.GetTracks(ctx, userID, limit, offset)

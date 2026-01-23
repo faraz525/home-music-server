@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -260,7 +261,7 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 	}
 }
 
-// DownloadHandler handles file downloads
+// DownloadHandler handles file downloads with metadata embedded
 func DownloadHandler(manager *Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		trackID := c.Param("id")
@@ -279,20 +280,20 @@ func DownloadHandler(manager *Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Open file via manager/storage
-		file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
+		// Generate download filename from metadata
+		downloadFilename := generateDownloadFilename(track)
+
+		// For MP3s, re-inject metadata that was stripped during sanitization
+		if isMP3ContentType(track.ContentType) && hasMetadata(track) {
+			if err := streamWithMetadata(c, manager, track, downloadFilename); err != nil {
+				fmt.Printf("[CrateDrop] Failed to stream with metadata: %v, falling back to direct download\n", err)
+				streamDirectDownload(c, manager, track, downloadFilename)
+			}
 			return
 		}
-		defer file.Close()
 
-		// Set headers for download
-		c.Header("Content-Type", track.ContentType)
-		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", track.OriginalFilename))
-
-		io.Copy(c.Writer, file)
+		// Non-MP3 or no metadata: serve directly
+		streamDirectDownload(c, manager, track, downloadFilename)
 	}
 }
 
@@ -324,6 +325,163 @@ func DeleteHandler(manager *Manager) gin.HandlerFunc {
 	}
 }
 
+
+// isMP3ContentType checks if the content type is MP3
+func isMP3ContentType(contentType string) bool {
+	return contentType == "audio/mpeg" || contentType == "audio/mp3" || contentType == "audio/x-mp3"
+}
+
+// hasMetadata checks if the track has any metadata worth embedding
+func hasMetadata(track *imodels.Track) bool {
+	return (track.Title != nil && *track.Title != "") ||
+		(track.Artist != nil && *track.Artist != "") ||
+		(track.Album != nil && *track.Album != "")
+}
+
+// generateDownloadFilename creates a filename from track metadata
+func generateDownloadFilename(track *imodels.Track) string {
+	ext := getFileExtension(track.OriginalFilename, track.ContentType)
+
+	// Build filename from metadata
+	var parts []string
+
+	if track.Artist != nil && *track.Artist != "" {
+		parts = append(parts, sanitizeFilename(*track.Artist))
+	}
+	if track.Title != nil && *track.Title != "" {
+		parts = append(parts, sanitizeFilename(*track.Title))
+	}
+
+	if len(parts) == 0 {
+		// Fall back to original filename if no metadata
+		return track.OriginalFilename
+	}
+
+	return strings.Join(parts, " - ") + ext
+}
+
+// getFileExtension extracts file extension from filename or content type
+func getFileExtension(filename, contentType string) string {
+	if idx := strings.LastIndex(filename, "."); idx != -1 {
+		return filename[idx:]
+	}
+	// Fallback based on content type
+	switch contentType {
+	case "audio/mpeg", "audio/mp3", "audio/x-mp3":
+		return ".mp3"
+	case "audio/wav", "audio/x-wav":
+		return ".wav"
+	case "audio/flac", "audio/x-flac":
+		return ".flac"
+	case "audio/aiff", "audio/x-aiff":
+		return ".aiff"
+	default:
+		return ""
+	}
+}
+
+// sanitizeFilename removes characters that are problematic in filenames
+func sanitizeFilename(s string) string {
+	// Remove or replace problematic characters
+	replacer := strings.NewReplacer(
+		"/", "-",
+		"\\", "-",
+		":", "-",
+		"*", "",
+		"?", "",
+		"\"", "'",
+		"<", "",
+		">", "",
+		"|", "-",
+	)
+	result := replacer.Replace(s)
+	// Trim spaces and limit length
+	result = strings.TrimSpace(result)
+	if len(result) > 100 {
+		result = result[:100]
+	}
+	return result
+}
+
+// streamDirectDownload serves the file directly without metadata injection
+func streamDirectDownload(c *gin.Context, manager *Manager, track *imodels.Track, filename string) {
+	file, info, err := manager.OpenFile(c.Request.Context(), track.FilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "server_error", "message": "Failed to open file"}})
+		return
+	}
+	defer file.Close()
+
+	c.Header("Content-Type", track.ContentType)
+	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+
+	io.Copy(c.Writer, file)
+}
+
+// streamWithMetadata uses ffmpeg to inject ID3 tags into the download stream
+func streamWithMetadata(c *gin.Context, manager *Manager, track *imodels.Track, filename string) error {
+	fullPath, ok := manager.ResolveFullPath(track.FilePath)
+	if !ok {
+		return fmt.Errorf("failed to resolve file path")
+	}
+
+	// Build ffmpeg command to inject metadata
+	args := []string{
+		"-i", fullPath,
+		"-c:a", "copy", // Copy audio without re-encoding
+	}
+
+	// Add metadata tags
+	if track.Title != nil && *track.Title != "" {
+		args = append(args, "-metadata", fmt.Sprintf("title=%s", *track.Title))
+	}
+	if track.Artist != nil && *track.Artist != "" {
+		args = append(args, "-metadata", fmt.Sprintf("artist=%s", *track.Artist))
+	}
+	if track.Album != nil && *track.Album != "" {
+		args = append(args, "-metadata", fmt.Sprintf("album=%s", *track.Album))
+	}
+	if track.Genre != nil && *track.Genre != "" {
+		args = append(args, "-metadata", fmt.Sprintf("genre=%s", *track.Genre))
+	}
+	if track.Year != nil && *track.Year > 0 {
+		args = append(args, "-metadata", fmt.Sprintf("date=%d", *track.Year))
+	}
+
+	// Output to stdout as MP3
+	args = append(args, "-f", "mp3", "pipe:1")
+
+	cmd := exec.CommandContext(c.Request.Context(), "ffmpeg", args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	// Set headers - we can't know exact size with streaming, so omit Content-Length
+	c.Header("Content-Type", "audio/mpeg")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("Transfer-Encoding", "chunked")
+
+	// Stream ffmpeg output to response
+	_, copyErr := io.Copy(c.Writer, stdout)
+
+	// Wait for ffmpeg to finish
+	cmdErr := cmd.Wait()
+
+	if copyErr != nil {
+		return fmt.Errorf("failed to copy ffmpeg output: %w", copyErr)
+	}
+	if cmdErr != nil {
+		return fmt.Errorf("ffmpeg failed: %w", cmdErr)
+	}
+
+	return nil
+}
 
 // handleRangeRequest handles HTTP range requests for audio streaming
 func handleRangeRequest(c *gin.Context, file io.ReadSeeker, fileSize int64, contentType, rangeHeader string) {
