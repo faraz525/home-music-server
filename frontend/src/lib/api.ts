@@ -130,6 +130,7 @@ export type SoundCloudConfig = {
   owner_user_id?: string
   playlist_id?: string
   last_sync_at?: string
+  masked_token?: string
 }
 
 export type SoundCloudSyncHistory = {

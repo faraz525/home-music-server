@@ -162,10 +162,10 @@ export function SoundCloudPage() {
                   OAuth Token
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   value={oauthToken}
                   onChange={(e) => setOauthToken(e.target.value)}
-                  placeholder={config?.configured ? '••••••••••••••••' : 'Paste your SoundCloud OAuth token'}
+                  placeholder={config?.masked_token || (config?.configured ? '••••••••••••••••' : 'Paste your SoundCloud OAuth token')}
                   className="input w-full"
                 />
                 <p className="text-xs text-crate-muted mt-2">

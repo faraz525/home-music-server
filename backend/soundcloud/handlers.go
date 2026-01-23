@@ -32,6 +32,15 @@ func (h *Handlers) GetConfig(c *gin.Context) {
 	}
 
 	hasToken := cfg.OAuthToken != nil && *cfg.OAuthToken != ""
+	var maskedToken string
+	if hasToken {
+		token := *cfg.OAuthToken
+		if len(token) > 8 {
+			maskedToken = token[:4] + "***...***" + token[len(token)-4:]
+		} else {
+			maskedToken = "****"
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"configured":    hasToken,
@@ -39,6 +48,7 @@ func (h *Handlers) GetConfig(c *gin.Context) {
 		"owner_user_id": cfg.OwnerUserID,
 		"playlist_id":   cfg.PlaylistID,
 		"last_sync_at":  cfg.LastSyncAt,
+		"masked_token":  maskedToken,
 	})
 }
 
