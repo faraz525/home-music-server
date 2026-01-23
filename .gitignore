@@ -103,3 +103,7 @@ backend/server/main
 
 # Working notes
 thoughts/
+
+# Video output
+video/out/
+video/.remotion/

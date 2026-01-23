@@ -1,0 +1,25 @@
+{
+  "name": "cratedrop-video",
+  "version": "1.0.0",
+  "description": "CrateDrop promotional video made with Remotion",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render CrateDropPromo out/cratedrop-promo.mp4",
+    "render:square": "remotion render CrateDropPromo-Square out/cratedrop-promo-square.mp4",
+    "render:gif": "remotion render CrateDropPromo out/cratedrop-promo.gif --image-format=png",
+    "upgrade": "remotion upgrade"
+  },
+  "keywords": ["remotion", "video", "cratedrop", "music"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@remotion/cli": "^4.0.409",
+    "@remotion/google-fonts": "^4.0.409",
+    "@remotion/transitions": "^4.0.409",
+    "@types/react": "^19.2.9",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "remotion": "^4.0.409",
+    "typescript": "^5.9.3"
+  }
+}
