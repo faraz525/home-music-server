@@ -117,11 +117,11 @@ export function SoundCloudPage() {
                       <>
                         {config?.enabled ? (
                           <span className="flex items-center gap-1.5 text-green-500">
-                            <Check size={16} /> Active
+                            <Check size={16} /> Active (auto-sync on)
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 text-crate-muted">
-                            <X size={16} /> Disabled
+                          <span className="flex items-center gap-1.5 text-crate-amber">
+                            <Check size={16} /> Configured (auto-sync off)
                           </span>
                         )}
                       </>
@@ -131,7 +131,7 @@ export function SoundCloudPage() {
                   </div>
                 </div>
               </div>
-              {config?.configured && config?.enabled && (
+              {config?.configured && (
                 <button
                   onClick={handleSync}
                   disabled={syncing}
