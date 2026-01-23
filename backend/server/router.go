@@ -2,9 +2,29 @@ package server
 
 import (
     "fmt"
+    "os"
 
     "github.com/gin-gonic/gin"
 )
+
+// getAllowedOrigins returns the list of allowed CORS origins based on environment
+func getAllowedOrigins() map[string]bool {
+    origins := map[string]bool{
+        "http://localhost":      true,
+        "http://localhost:80":   true,
+        "http://localhost:5173": true, // Vite dev server
+        "http://127.0.0.1":      true,
+        "http://127.0.0.1:80":   true,
+        "http://127.0.0.1:5173": true,
+    }
+
+    // Add production BASE_URL if set
+    if baseURL := os.Getenv("BASE_URL"); baseURL != "" {
+        origins[baseURL] = true
+    }
+
+    return origins
+}
 
 // NewRouter constructs a Gin engine with common middleware and returns
 // both the engine and the versioned API group.
@@ -23,13 +43,21 @@ func NewRouter() (*gin.Engine, *gin.RouterGroup) {
     }))
     r.Use(gin.Recovery())
 
-    // Simple permissive CORS for now; can be replaced with gin-contrib/cors later
+    // CORS middleware with explicit origin allowlist
+    allowedOrigins := getAllowedOrigins()
     r.Use(func(c *gin.Context) {
-        c.Header("Access-Control-Allow-Origin", "*")
+        origin := c.GetHeader("Origin")
+
+        // Only set CORS headers if origin is in allowlist
+        if allowedOrigins[origin] {
+            c.Header("Access-Control-Allow-Origin", origin)
+            c.Header("Access-Control-Allow-Credentials", "true")
+        }
+
         c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Range")
         c.Header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
-        c.Header("Access-Control-Allow-Credentials", "true")
+
         if c.Request.Method == "OPTIONS" {
             c.AbortWithStatus(204)
             return

@@ -11,6 +11,11 @@ import (
 	"github.com/faraz525/home-music-server/backend/utils"
 )
 
+// isProduction returns true if running in production environment
+func isProduction() bool {
+	return os.Getenv("APP_ENV") == "production"
+}
+
 // getCookieDomain determines the appropriate domain for cookies based on BASE_URL
 func getCookieDomain() string {
 	baseURL := os.Getenv("BASE_URL")
@@ -36,15 +41,17 @@ func getCookieDomain() string {
 // setAuthCookies sets both access and refresh token cookies with the appropriate domain
 func setAuthCookies(c *gin.Context, tokens *imodels.Tokens) {
 	domain := getCookieDomain()
-	c.SetCookie("refresh_token", tokens.RefreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", domain, false, true)
-	c.SetCookie("access_token", tokens.AccessToken, 60*15, "/", domain, false, true)
+	secure := isProduction()
+	c.SetCookie("refresh_token", tokens.RefreshToken, int(utils.RefreshTokenDuration.Seconds()), "/", domain, secure, true)
+	c.SetCookie("access_token", tokens.AccessToken, 60*15, "/", domain, secure, true)
 }
 
 // clearAuthCookies clears both access and refresh token cookies
 func clearAuthCookies(c *gin.Context) {
 	domain := getCookieDomain()
-	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
-	c.SetCookie("access_token", "", -1, "/", domain, false, true)
+	secure := isProduction()
+	c.SetCookie("refresh_token", "", -1, "/", domain, secure, true)
+	c.SetCookie("access_token", "", -1, "/", domain, secure, true)
 }
 
 type SignupRequest struct {
