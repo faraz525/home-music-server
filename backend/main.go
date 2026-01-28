@@ -15,6 +15,7 @@ import (
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/server"
 	"github.com/faraz525/home-music-server/backend/soundcloud"
+	"github.com/faraz525/home-music-server/backend/spotify"
 	"github.com/faraz525/home-music-server/backend/tracks"
 )
 
@@ -67,6 +68,18 @@ func main() {
 	)
 	fmt.Printf("[CrateDrop] SoundCloud sync manager initialized\n")
 
+	// Initialize Spotify sync manager
+	spotifyRepo := spotify.NewRepository(db)
+	spotifyManager := spotify.NewManager(
+		spotifyRepo,
+		tracksRepo,
+		storage,
+		extractor,
+		playlistsManager,
+		cfg.DataDir,
+	)
+	fmt.Printf("[CrateDrop] Spotify sync manager initialized\n")
+
 	// Initialize router and API group
 	r, api := server.NewRouter()
 
@@ -77,10 +90,12 @@ func main() {
 	tracks.Routes(tracksManager, playlistsManager)(protected)
 	playlists.Routes(playlistsManager)(protected)
 	soundcloud.Routes(soundcloudManager)(protected)
+	spotify.Routes(spotifyManager)(protected)
 
-	// Start SoundCloud sync loop in background
+	// Start sync loops in background
 	ctx := context.Background()
 	go soundcloud.StartSyncLoop(ctx, soundcloudManager)
+	go spotify.StartSyncLoop(ctx, spotifyManager)
 
 	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)

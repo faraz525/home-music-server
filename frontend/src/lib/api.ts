@@ -155,3 +155,48 @@ export const soundcloudApi = {
   getHistory: () =>
     api.get<{ history: SoundCloudSyncHistory[] }>('/api/soundcloud/history'),
 }
+
+// Spotify sync API
+export type SpotifyConfig = {
+  configured: boolean
+  enabled: boolean
+  owner_user_id?: string
+  liked_songs_playlist_id?: string
+  last_sync_at?: string
+  client_id?: string
+}
+
+export type SpotifySyncHistory = {
+  id: string
+  started_at: string
+  completed_at?: string
+  tracks_added: number
+  tracks_skipped: number
+  error_message?: string
+}
+
+export const spotifyApi = {
+  getConfig: () =>
+    api.get<SpotifyConfig>('/api/spotify/config'),
+
+  updateConfig: (data: { enabled: boolean }) =>
+    api.put('/api/spotify/config', data),
+
+  exchangeToken: (data: { code: string; code_verifier: string; redirect_uri: string }) =>
+    api.post('/api/spotify/token', data),
+
+  disconnect: () =>
+    api.post('/api/spotify/disconnect'),
+
+  triggerSync: () =>
+    api.post('/api/spotify/sync'),
+
+  getHistory: () =>
+    api.get<{ history: SpotifySyncHistory[] }>('/api/spotify/history'),
+
+  getPlaylists: () =>
+    api.get<{ playlists: Array<{ id: string; name: string; tracks: { total: number } }> }>('/api/spotify/playlists'),
+
+  getSyncedPlaylists: () =>
+    api.get<{ playlists: Array<{ id: string; spotify_playlist_id: string; local_playlist_id: string; name: string; enabled: boolean }> }>('/api/spotify/synced-playlists'),
+}
