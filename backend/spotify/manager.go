@@ -631,10 +631,12 @@ func (m *Manager) GetSyncedPlaylists(ctx context.Context) ([]*SyncedPlaylist, er
 	return m.repo.GetSyncedPlaylists(ctx)
 }
 
-// Disconnect removes the Spotify connection
 func (m *Manager) Disconnect(ctx context.Context) error {
 	cfg, err := m.repo.GetSyncConfig(ctx)
-	if err != nil || cfg == nil {
+	if err != nil {
+		return fmt.Errorf("failed to get sync config: %w", err)
+	}
+	if cfg == nil {
 		return nil
 	}
 

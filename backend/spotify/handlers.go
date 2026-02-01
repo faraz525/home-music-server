@@ -57,8 +57,7 @@ func (h *Handlers) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	// Get the user ID from the context (set by auth middleware)
-	userID, exists := c.Get("userID")
+	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "unauthorized", "message": "user not authenticated"}})
 		return
@@ -85,7 +84,7 @@ func (h *Handlers) ExchangeToken(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("userID")
+	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "unauthorized", "message": "user not authenticated"}})
 		return

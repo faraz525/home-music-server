@@ -5,7 +5,6 @@ import { useAuth } from '../state/auth'
 import { toast } from 'sonner'
 import { useSearchParams } from 'react-router-dom'
 
-// PKCE helpers
 function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const values = crypto.getRandomValues(new Uint8Array(length))
@@ -61,7 +60,6 @@ export function SpotifyPage() {
     }
   }, [])
 
-  // Handle OAuth callback
   useEffect(() => {
     const code = searchParams.get('code')
     const state = searchParams.get('state')
@@ -83,7 +81,6 @@ export function SpotifyPage() {
       } else if (!codeVerifier) {
         toast.error('Code verifier not found. Please try connecting again.')
       } else {
-        // Exchange code for token
         setConnecting(true)
         spotifyApi.exchangeToken({
           code,
@@ -104,7 +101,6 @@ export function SpotifyPage() {
           })
       }
 
-      // Clean up URL
       searchParams.delete('code')
       searchParams.delete('state')
       setSearchParams(searchParams)
@@ -125,7 +121,6 @@ export function SpotifyPage() {
     const state = generateRandomString(16)
     const codeChallenge = await generateCodeChallenge(codeVerifier)
 
-    // Store for later verification
     sessionStorage.setItem('spotify_code_verifier', codeVerifier)
     sessionStorage.setItem('spotify_auth_state', state)
 

@@ -115,5 +115,18 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Check if spotify_sync_config table exists
+	var spTableCount int
+	_ = d.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='spotify_sync_config'").Scan(&spTableCount)
+	if spTableCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/003_add_spotify_sync.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 003_add_spotify_sync: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 003_add_spotify_sync: %w", err)
+		}
+	}
+
 	return nil
 }
