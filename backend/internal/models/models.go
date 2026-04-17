@@ -13,22 +13,28 @@ type User struct {
 }
 
 type Track struct {
-	ID               string    `json:"id"`
-	OwnerUserID      string    `json:"owner_user_id"`
-	OriginalFilename string    `json:"original_filename"`
-	ContentType      string    `json:"content_type"`
-	SizeBytes        int64     `json:"size_bytes"`
-	DurationSeconds  *float64  `json:"duration_seconds,omitempty"`
-	Title            *string   `json:"title,omitempty"`
-	Artist           *string   `json:"artist,omitempty"`
-	Album            *string   `json:"album,omitempty"`
-	Genre            *string   `json:"genre,omitempty"`
-	Year             *int      `json:"year,omitempty"`
-	SampleRate       *int      `json:"sample_rate,omitempty"`
-	Bitrate          *int      `json:"bitrate,omitempty"`
-	FilePath         string    `json:"file_path"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string     `json:"id"`
+	OwnerUserID      string     `json:"owner_user_id"`
+	OriginalFilename string     `json:"original_filename"`
+	ContentType      string     `json:"content_type"`
+	SizeBytes        int64      `json:"size_bytes"`
+	DurationSeconds  *float64   `json:"duration_seconds,omitempty"`
+	Title            *string    `json:"title,omitempty"`
+	Artist           *string    `json:"artist,omitempty"`
+	Album            *string    `json:"album,omitempty"`
+	Genre            *string    `json:"genre,omitempty"`
+	Year             *int       `json:"year,omitempty"`
+	SampleRate       *int       `json:"sample_rate,omitempty"`
+	Bitrate          *int       `json:"bitrate,omitempty"`
+	BPM              *float64   `json:"bpm,omitempty"`
+	BPMConfidence    *float64   `json:"bpm_confidence,omitempty"`
+	MusicalKey       *string    `json:"musical_key,omitempty"`
+	KeyConfidence    *float64   `json:"key_confidence,omitempty"`
+	AnalyzedAt       *time.Time `json:"analyzed_at,omitempty"`
+	AnalysisStatus   string     `json:"analysis_status"`
+	FilePath         string     `json:"file_path"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type RefreshToken struct {
