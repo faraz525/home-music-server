@@ -1,0 +1,11 @@
+{
+  "rhythm": {
+    "bpm": 128.04,
+    "bpm_confidence": 3.82
+  },
+  "tonal": {
+    "key_key": "A",
+    "key_scale": "minor",
+    "key_strength": 0.78
+  }
+}
