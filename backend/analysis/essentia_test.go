@@ -29,9 +29,7 @@ func writeStubBinary(t *testing.T, outputJSON string) string {
 
 func withPathPrepended(t *testing.T, dir string) {
 	t.Helper()
-	prev := os.Getenv("PATH")
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+prev)
-	t.Cleanup(func() { os.Setenv("PATH", prev) })
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 func TestAnalyzer_Analyze_Success(t *testing.T) {
@@ -55,8 +53,7 @@ func TestAnalyzer_Analyze_Success(t *testing.T) {
 }
 
 func TestAnalyzer_Analyze_BinaryMissing(t *testing.T) {
-	os.Setenv("PATH", "/nonexistent")
-	t.Cleanup(func() { os.Setenv("PATH", "/usr/bin:/bin") })
+	t.Setenv("PATH", "/nonexistent")
 
 	a := NewAnalyzer(30 * time.Second)
 	_, err := a.Analyze(context.Background(), "/tmp/anything.wav")

@@ -30,7 +30,8 @@ func NewAnalyzer(timeout time.Duration) *Analyzer {
 }
 
 // BinaryAvailable reports whether the essentia binary is on PATH. Call once
-// at startup to decide whether to start the ticker.
+// at startup to decide whether to start the ticker. Analyze() re-checks, so
+// this is an optimization signal only — not a guarantee.
 func BinaryAvailable() bool {
 	_, err := exec.LookPath(binaryName)
 	return err == nil
@@ -53,6 +54,8 @@ func (a *Analyzer) Analyze(ctx context.Context, audioPath string) (Result, error
 		return Result{}, fmt.Errorf("mktemp: %w", err)
 	}
 	defer os.RemoveAll(outDir)
+	// The .json suffix is load-bearing: streaming_extractor_music infers the
+	// output format from the extension.
 	outPath := filepath.Join(outDir, "out.json")
 
 	runCtx, cancel := context.WithTimeout(ctx, a.timeout)
@@ -60,8 +63,13 @@ func (a *Analyzer) Analyze(ctx context.Context, audioPath string) (Result, error
 
 	cmd := exec.CommandContext(runCtx, binaryName, audioPath, outPath)
 	output, err := cmd.CombinedOutput()
-	if runCtx.Err() == context.DeadlineExceeded {
+	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		return Result{}, ErrTimeout
+	}
+	// Preserve parent-ctx cancellation so the manager can distinguish shutdown
+	// from an actual analysis failure.
+	if ctx.Err() != nil {
+		return Result{}, ctx.Err()
 	}
 	if err != nil {
 		return Result{}, fmt.Errorf("essentia exec failed: %w (output: %s)", err, string(output))
@@ -69,6 +77,9 @@ func (a *Analyzer) Analyze(ctx context.Context, audioPath string) (Result, error
 
 	raw, err := os.ReadFile(outPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return Result{}, fmt.Errorf("%w: output file not created (stderr: %s)", ErrMalformedOutput, string(output))
+		}
 		return Result{}, fmt.Errorf("read essentia output: %w", err)
 	}
 	result, err := ParseEssentiaOutput(raw)
