@@ -180,3 +180,100 @@ func TestRepository_RecordTerminalFailure_SetsFailedImmediately(t *testing.T) {
 		t.Errorf("status = %q, want failed", status)
 	}
 }
+
+func TestRepository_RecordFailure_BackoffSchedule(t *testing.T) {
+	db := newTestDB(t)
+	seedPending(t, db, "t1", "/a.wav")
+	repo := NewRepository(db)
+
+	base := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
+
+	// 1st failure -> +10m
+	if err := repo.RecordFailure(context.Background(), "t1", "boom", base); err != nil {
+		t.Fatalf("1st RecordFailure: %v", err)
+	}
+	var nextRetry sql.NullTime
+	if err := db.QueryRow(`SELECT next_retry_at FROM tracks WHERE id='t1'`).Scan(&nextRetry); err != nil {
+		t.Fatalf("read next_retry_at: %v", err)
+	}
+	want := base.Add(10 * time.Minute)
+	if !nextRetry.Valid || !nextRetry.Time.Equal(want) {
+		t.Errorf("next_retry_at after 1st = %v, want %v", nextRetry.Time, want)
+	}
+
+	// 2nd failure -> +1h
+	if err := repo.RecordFailure(context.Background(), "t1", "boom", base); err != nil {
+		t.Fatalf("2nd RecordFailure: %v", err)
+	}
+	if err := db.QueryRow(`SELECT next_retry_at FROM tracks WHERE id='t1'`).Scan(&nextRetry); err != nil {
+		t.Fatalf("read next_retry_at: %v", err)
+	}
+	want = base.Add(1 * time.Hour)
+	if !nextRetry.Valid || !nextRetry.Time.Equal(want) {
+		t.Errorf("next_retry_at after 2nd = %v, want %v", nextRetry.Time, want)
+	}
+
+	// 3rd failure -> terminal, next_retry_at cleared
+	if err := repo.RecordFailure(context.Background(), "t1", "boom", base); err != nil {
+		t.Fatalf("3rd RecordFailure: %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT analysis_status, next_retry_at FROM tracks WHERE id='t1'`).Scan(&status, &nextRetry); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "failed" {
+		t.Errorf("status after 3rd = %q, want failed", status)
+	}
+	if nextRetry.Valid {
+		t.Errorf("next_retry_at after terminal = %v, want NULL", nextRetry.Time)
+	}
+}
+
+func TestRepository_RecordFailure_SkipsTerminalRows(t *testing.T) {
+	db := newTestDB(t)
+	seedPending(t, db, "t1", "/a.wav")
+	repo := NewRepository(db)
+
+	// Flip straight to terminal via RecordTerminalFailure.
+	if err := repo.RecordTerminalFailure(context.Background(), "t1", "file missing"); err != nil {
+		t.Fatalf("RecordTerminalFailure: %v", err)
+	}
+
+	// A late RecordFailure call must NOT resurrect the row.
+	if err := repo.RecordFailure(context.Background(), "t1", "late error", time.Now()); err != nil {
+		t.Fatalf("RecordFailure: %v", err)
+	}
+
+	var status string
+	var retryCount int
+	if err := db.QueryRow(`SELECT analysis_status, analysis_retry_count FROM tracks WHERE id='t1'`).Scan(&status, &retryCount); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "failed" {
+		t.Errorf("status = %q, want failed (not resurrected)", status)
+	}
+	if retryCount != 0 {
+		t.Errorf("retry_count = %d, want 0 (not touched)", retryCount)
+	}
+}
+
+func TestRepository_RecordFailure_SkipsUserEditedRows(t *testing.T) {
+	db := newTestDB(t)
+	seedPending(t, db, "t1", "/a.wav")
+	if _, err := db.Exec(`UPDATE tracks SET analysis_status='user_edited' WHERE id='t1'`); err != nil {
+		t.Fatalf("seed user_edited: %v", err)
+	}
+	repo := NewRepository(db)
+
+	if err := repo.RecordFailure(context.Background(), "t1", "late error", time.Now()); err != nil {
+		t.Fatalf("RecordFailure: %v", err)
+	}
+
+	var status string
+	if err := db.QueryRow(`SELECT analysis_status FROM tracks WHERE id='t1'`).Scan(&status); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "user_edited" {
+		t.Errorf("status = %q, want user_edited (preserved)", status)
+	}
+}

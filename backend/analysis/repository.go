@@ -83,7 +83,9 @@ func (r *Repository) MarkAnalyzed(ctx context.Context, id string, res Result) er
 }
 
 // RecordFailure increments retry_count and schedules the next attempt. After
-// maxRetries failures the status flips to 'failed' (terminal).
+// maxRetries failures the status flips to 'failed' (terminal). Skips no-ops on
+// rows that are already terminal ('failed') or user-overridden ('user_edited')
+// so a late error from a cancelled analysis can't resurrect a closed track.
 func (r *Repository) RecordFailure(ctx context.Context, id, errMsg string, now time.Time) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -92,9 +94,13 @@ func (r *Repository) RecordFailure(ctx context.Context, id, errMsg string, now t
 	defer tx.Rollback()
 
 	var current int
-	err = tx.QueryRowContext(ctx, `SELECT analysis_retry_count FROM tracks WHERE id=?`, id).Scan(&current)
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT analysis_status, analysis_retry_count FROM tracks WHERE id=?`, id).Scan(&status, &current)
 	if err != nil {
 		return err
+	}
+	if status == "failed" || status == "user_edited" {
+		return tx.Commit()
 	}
 	next := current + 1
 	if next >= maxRetries {
