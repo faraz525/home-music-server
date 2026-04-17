@@ -8,6 +8,7 @@ import (
 
 	idb "github.com/faraz525/home-music-server/backend/internal/db"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
+	"github.com/faraz525/home-music-server/backend/internal/tracksql"
 	"github.com/google/uuid"
 )
 
@@ -437,12 +438,10 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 		return nil, err
 	}
 
-	// Get tracks for this playlist
+	// Get tracks for this playlist. TrackColumns + trailing pt.added_at
+	// preserves the pre-existing CreatedAt reuse for added_at.
 	query := `
-		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at,
-		       pt.added_at
+		SELECT ` + tracksql.TrackColumns + `, pt.added_at
 		FROM tracks t
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE pt.playlist_id = ?
@@ -456,7 +455,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 	}
 	defer rows.Close()
 
-	var tracks []*imodels.Track
+	var trackList []*imodels.Track
 	for rows.Next() {
 		var track imodels.Track
 		err := rows.Scan(
@@ -482,7 +481,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 			return nil, fmt.Errorf("failed to scan track: %w", err)
 		}
 
-		tracks = append(tracks, &track)
+		trackList = append(trackList, &track)
 	}
 
 	// Get total count
@@ -497,7 +496,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 
 	return &imodels.PlaylistWithTracks{
 		Playlist: playlist,
-		Tracks:   tracks,
+		Tracks:   trackList,
 		Total:    total,
 		Limit:    limit,
 		Offset:   offset,
@@ -509,9 +508,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 // Optimized query using LEFT JOIN instead of NOT IN for better performance on Raspberry Pi
 func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*imodels.TrackList, error) {
 	query := `
-		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		SELECT ` + tracksql.TrackColumns + `
 		FROM tracks t
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE t.owner_user_id = ?
@@ -527,32 +524,13 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	}
 	defer rows.Close()
 
-	var tracks []*imodels.Track
+	var trackList []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID,
-			&track.OwnerUserID,
-			&track.OriginalFilename,
-			&track.ContentType,
-			&track.SizeBytes,
-			&track.DurationSeconds,
-			&track.Title,
-			&track.Artist,
-			&track.Album,
-			&track.Genre,
-			&track.Year,
-			&track.SampleRate,
-			&track.Bitrate,
-			&track.FilePath,
-			&track.CreatedAt,
-			&track.UpdatedAt,
-		)
+		track, err := tracksql.ScanTrack(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
 		}
-
-		tracks = append(tracks, &track)
+		trackList = append(trackList, track)
 	}
 
 	// Get total count
@@ -564,7 +542,7 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	hasNext := offset+limit < total
 
 	return &imodels.TrackList{
-		Tracks:  tracks,
+		Tracks:  trackList,
 		Total:   total,
 		Limit:   limit,
 		Offset:  offset,
@@ -592,9 +570,7 @@ func (r *Repository) GetUnsortedTrackCount(userID string) (int, error) {
 // SearchTracksNotInPlaylist searches unsorted tracks using FTS5
 func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offset int) (*imodels.TrackList, error) {
 	searchQuery := `
-		SELECT DISTINCT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		SELECT DISTINCT ` + tracksql.TrackColumns + `
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -611,32 +587,13 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 	}
 	defer rows.Close()
 
-	var tracks []*imodels.Track
+	var trackList []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID,
-			&track.OwnerUserID,
-			&track.OriginalFilename,
-			&track.ContentType,
-			&track.SizeBytes,
-			&track.DurationSeconds,
-			&track.Title,
-			&track.Artist,
-			&track.Album,
-			&track.Genre,
-			&track.Year,
-			&track.SampleRate,
-			&track.Bitrate,
-			&track.FilePath,
-			&track.CreatedAt,
-			&track.UpdatedAt,
-		)
+		track, err := tracksql.ScanTrack(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
 		}
-
-		tracks = append(tracks, &track)
+		trackList = append(trackList, track)
 	}
 
 	// Get total count of matching unsorted tracks
@@ -658,7 +615,7 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 	hasNext := offset+limit < total
 
 	return &imodels.TrackList{
-		Tracks:  tracks,
+		Tracks:  trackList,
 		Total:   total,
 		Limit:   limit,
 		Offset:  offset,
@@ -669,9 +626,7 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 // SearchPlaylistTracks searches within a specific playlist using FTS5
 func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offset int) (*imodels.TrackList, error) {
 	searchQuery := `
-		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		SELECT ` + tracksql.TrackColumns + `
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -687,32 +642,13 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 	}
 	defer rows.Close()
 
-	var tracks []*imodels.Track
+	var trackList []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID,
-			&track.OwnerUserID,
-			&track.OriginalFilename,
-			&track.ContentType,
-			&track.SizeBytes,
-			&track.DurationSeconds,
-			&track.Title,
-			&track.Artist,
-			&track.Album,
-			&track.Genre,
-			&track.Year,
-			&track.SampleRate,
-			&track.Bitrate,
-			&track.FilePath,
-			&track.CreatedAt,
-			&track.UpdatedAt,
-		)
+		track, err := tracksql.ScanTrack(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
 		}
-
-		tracks = append(tracks, &track)
+		trackList = append(trackList, track)
 	}
 
 	// Get total count of matching tracks in this playlist
@@ -733,7 +669,7 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 	hasNext := offset+limit < total
 
 	return &imodels.TrackList{
-		Tracks:  tracks,
+		Tracks:  trackList,
 		Total:   total,
 		Limit:   limit,
 		Offset:  offset,

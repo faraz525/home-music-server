@@ -6,8 +6,20 @@ import (
 
 	"github.com/faraz525/home-music-server/backend/internal/db"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
+	"github.com/faraz525/home-music-server/backend/internal/tracksql"
 	"github.com/faraz525/home-music-server/backend/utils"
 )
+
+// TrackColumns and ScanTrack are re-exported from internal/tracksql so
+// callers outside this package (e.g. playlists) can reach them without
+// hitting the pre-existing tracks→playlists import cycle.
+const TrackColumns = tracksql.TrackColumns
+
+// RowScanner matches *sql.Row / *sql.Rows.
+type RowScanner = tracksql.RowScanner
+
+// ScanTrack scans one row of TrackColumns into a Track.
+var ScanTrack = tracksql.ScanTrack
 
 // Data handles track data operations
 type Repository struct {
@@ -41,9 +53,8 @@ func (r *Repository) CreateTrack(ctx context.Context, track *imodels.Track) (*im
 
 // GetTracks retrieves tracks for a user with pagination
 func (r *Repository) GetTracks(ctx context.Context, userID string, limit, offset int) ([]*imodels.Track, error) {
-	query := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
-		FROM tracks WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	query := `SELECT ` + TrackColumns + `
+		FROM tracks t WHERE t.owner_user_id = ? ORDER BY t.created_at DESC LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
@@ -53,16 +64,11 @@ func (r *Repository) GetTracks(ctx context.Context, userID string, limit, offset
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := ScanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
@@ -76,9 +82,7 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 	if searchQuery != "" {
 		// Use FTS5 for search
 		query = `
-			SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-				t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year, 
-				t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+			SELECT ` + TrackColumns + `
 			FROM tracks t
 			INNER JOIN tracks_fts fts ON t.id = fts.track_id
 			WHERE tracks_fts MATCH ?
@@ -90,11 +94,9 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 	} else {
 		// No search, just list all
 		query = `
-			SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-				duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, 
-				file_path, created_at, updated_at
-			FROM tracks 
-			ORDER BY created_at DESC 
+			SELECT ` + TrackColumns + `
+			FROM tracks t
+			ORDER BY t.created_at DESC
 			LIMIT ? OFFSET ?
 		`
 		args = []interface{}{limit, offset}
@@ -108,16 +110,11 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := ScanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
@@ -125,21 +122,11 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 
 // GetTrackByID retrieves a single track by ID
 func (r *Repository) GetTrackByID(ctx context.Context, trackID string) (*imodels.Track, error) {
-	var track imodels.Track
-	err := r.db.QueryRowContext(ctx,
-		`SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
-		FROM tracks WHERE id = ?`,
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+TrackColumns+` FROM tracks t WHERE t.id = ?`,
 		trackID,
-	).Scan(
-		&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-		&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-		&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 	)
-	if err != nil {
-		return nil, err
-	}
-	return &track, nil
+	return ScanTrack(row)
 }
 
 // DeleteTrack deletes a track by ID
@@ -168,12 +155,10 @@ func (r *Repository) SearchTracks(ctx context.Context, query string, userID stri
 	// FTS5 query - searches across all indexed fields
 	// Use double quotes for phrase matching or just the term for any word matching
 	searchQuery := `
-		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-			t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year, 
-			t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		SELECT ` + TrackColumns + `
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
-		WHERE t.owner_user_id = ? 
+		WHERE t.owner_user_id = ?
 		AND tracks_fts MATCH ?
 		ORDER BY fts.rank, t.created_at DESC
 		LIMIT ? OFFSET ?
@@ -199,16 +184,11 @@ func (r *Repository) SearchTracks(ctx context.Context, query string, userID stri
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := ScanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
