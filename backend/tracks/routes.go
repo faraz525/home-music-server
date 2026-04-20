@@ -16,6 +16,7 @@ func Routes(m *Manager, pm *playlists.Manager) func(*gin.RouterGroup) {
 		g.GET("/:id/download", DownloadHandler(m))
 		g.DELETE("/:id", DeleteHandler(m))
 		g.GET("/:id", GetHandler(m))
+		g.PATCH("/:id", PatchHandler(m))
 
 	// Admin routes
 	admin := g.Group("/admin")

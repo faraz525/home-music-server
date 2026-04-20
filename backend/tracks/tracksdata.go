@@ -312,3 +312,23 @@ func prepareFTS5Query(query string) string {
 	// "on & on" becomes "on* AND on*" (& is removed, both "on" terms must match)
 	return strings.Join(terms, " AND ")
 }
+
+// UpdateAnalysisOverride sets user-edited BPM and/or key and flips status to 'user_edited'.
+// nil values leave the corresponding column untouched.
+func (r *Repository) UpdateAnalysisOverride(ctx context.Context, trackID string, bpm *float64, musicalKey *string) error {
+	// Build a dynamic SET clause so we only update provided fields.
+	sets := []string{"analysis_status = 'user_edited'", "analysis_error = NULL", "next_retry_at = NULL", "updated_at = CURRENT_TIMESTAMP"}
+	args := []any{}
+	if bpm != nil {
+		sets = append(sets, "bpm = ?")
+		args = append(args, *bpm)
+	}
+	if musicalKey != nil {
+		sets = append(sets, "musical_key = ?")
+		args = append(args, *musicalKey)
+	}
+	args = append(args, trackID)
+	query := "UPDATE tracks SET " + strings.Join(sets, ", ") + " WHERE id = ?"
+	_, err := r.db.ExecContext(ctx, query, args...)
+	return err
+}
