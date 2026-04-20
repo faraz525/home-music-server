@@ -26,6 +26,31 @@ function MiniVinyl({ spinning = false }: { spinning?: boolean }) {
   )
 }
 
+function ConfidenceDot({ status, confidence }: { status?: string; confidence?: number }) {
+  let color = 'bg-transparent border border-crate-subtle' // pending default
+  let title = 'Analyzing…'
+
+  if (status === 'failed') {
+    color = 'bg-transparent border border-crate-danger'
+    title = 'Analysis failed'
+  } else if (status === 'user_edited') {
+    return null // no dot for user-edited values
+  } else if (status === 'analyzed' && typeof confidence === 'number') {
+    if (confidence > 0.7) {
+      color = 'bg-green-500'
+      title = `High confidence (${Math.round(confidence * 100)}%)`
+    } else if (confidence >= 0.4) {
+      color = 'bg-amber-500'
+      title = `Medium confidence (${Math.round(confidence * 100)}%)`
+    } else {
+      color = 'bg-red-500'
+      title = `Low confidence (${Math.round(confidence * 100)}%)`
+    }
+  }
+
+  return <span className={`inline-block w-2 h-2 rounded-full ${color}`} title={title} />
+}
+
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
   const current = queue[index]
@@ -313,7 +338,7 @@ export function LibraryPage() {
       {/* Track list */}
       <div className="card overflow-visible">
         {/* Header row - hidden on mobile */}
-        <div className="hidden sm:grid px-4 py-3 text-xs uppercase tracking-wider text-crate-subtle grid-cols-[28px_1fr_1fr_100px_60px_40px] items-center gap-3 border-b border-crate-border bg-crate-elevated/50">
+        <div className="hidden sm:grid px-4 py-3 text-xs uppercase tracking-wider text-crate-subtle grid-cols-[28px_1fr_1fr_70px_70px_100px_60px_40px] items-center gap-3 border-b border-crate-border bg-crate-elevated/50">
           <input
             type="checkbox"
             checked={tracks?.tracks && tracks.tracks.length > 0 && selectedTrackIds.size === tracks.tracks.length}
@@ -325,6 +350,8 @@ export function LibraryPage() {
           />
           <div>Title</div>
           <div>Album</div>
+          <div className="text-right">BPM</div>
+          <div className="text-right">Key</div>
           <div className="text-right">Added</div>
           <div className="text-right">Time</div>
           <div></div>
@@ -366,7 +393,7 @@ export function LibraryPage() {
           return (
             <div
               key={t.id}
-              className={`stagger-item group px-4 py-3 grid grid-cols-[1fr_auto] sm:grid-cols-[28px_1fr_1fr_100px_60px_40px] items-center gap-3 border-b border-crate-border/50 hover:bg-crate-elevated/50 transition-all cursor-move ${isSelected ? 'bg-crate-amber/5 border-l-2 border-l-crate-amber' : ''} ${isDragging ? 'opacity-50' : ''} ${isCurrent ? 'bg-crate-elevated/30' : ''}`}
+              className={`stagger-item group px-4 py-3 grid grid-cols-[1fr_auto] sm:grid-cols-[28px_1fr_1fr_70px_70px_100px_60px_40px] items-center gap-3 border-b border-crate-border/50 hover:bg-crate-elevated/50 transition-all cursor-move ${isSelected ? 'bg-crate-amber/5 border-l-2 border-l-crate-amber' : ''} ${isDragging ? 'opacity-50' : ''} ${isCurrent ? 'bg-crate-elevated/30' : ''}`}
               draggable
               onDragStart={(e) => handleDragStart(e, t.id)}
               onDragEnd={handleDragEnd}
@@ -449,6 +476,18 @@ export function LibraryPage() {
 
               {/* Desktop: Album */}
               <div className="hidden sm:block truncate text-sm text-crate-muted">{t.album || '—'}</div>
+
+              {/* Desktop: BPM */}
+              <div className="hidden sm:flex items-center justify-end gap-1.5 text-sm text-crate-subtle tabular-nums">
+                <ConfidenceDot status={t.analysis_status} confidence={t.bpm_confidence} />
+                <span>{t.bpm ? t.bpm.toFixed(1) : '—'}</span>
+              </div>
+
+              {/* Desktop: Key */}
+              <div className="hidden sm:flex items-center justify-end gap-1.5 text-sm text-crate-subtle">
+                <ConfidenceDot status={t.analysis_status} confidence={t.key_confidence} />
+                <span>{t.musical_key || '—'}</span>
+              </div>
 
               {/* Desktop: Date added */}
               <div className="hidden sm:block text-right text-sm text-crate-subtle">
