@@ -277,3 +277,59 @@ func TestRepository_RecordFailure_SkipsUserEditedRows(t *testing.T) {
 		t.Errorf("status = %q, want user_edited (preserved)", status)
 	}
 }
+
+func TestRepository_MarkAnalyzed_SkipsUserEditedRows(t *testing.T) {
+	db := newTestDB(t)
+	seedPending(t, db, "t1", "/a.wav")
+	// Simulate a user override landing mid-analysis.
+	if _, err := db.Exec(`UPDATE tracks SET analysis_status='user_edited', bpm=120.0, musical_key='5A' WHERE id='t1'`); err != nil {
+		t.Fatalf("seed user_edited: %v", err)
+	}
+	repo := NewRepository(db)
+
+	// Analyzer finishes and tries to write detected values — must be ignored.
+	err := repo.MarkAnalyzed(context.Background(), "t1", Result{
+		BPM: 128.0, BPMConfidence: 0.9, Key: "8A", KeyConfidence: 0.8,
+	})
+	if err != nil {
+		t.Fatalf("MarkAnalyzed: %v", err)
+	}
+
+	var status string
+	var bpm sql.NullFloat64
+	var key sql.NullString
+	if err := db.QueryRow(`SELECT analysis_status, bpm, musical_key FROM tracks WHERE id='t1'`).Scan(&status, &bpm, &key); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "user_edited" {
+		t.Errorf("status = %q, want user_edited (user override preserved)", status)
+	}
+	if !bpm.Valid || bpm.Float64 != 120.0 {
+		t.Errorf("bpm = %v, want 120.0 (user value preserved)", bpm)
+	}
+	if !key.Valid || key.String != "5A" {
+		t.Errorf("musical_key = %v, want 5A (user value preserved)", key)
+	}
+}
+
+func TestRepository_MarkAnalyzed_SkipsFailedRows(t *testing.T) {
+	db := newTestDB(t)
+	seedPending(t, db, "t1", "/a.wav")
+	if _, err := db.Exec(`UPDATE tracks SET analysis_status='failed' WHERE id='t1'`); err != nil {
+		t.Fatalf("seed failed: %v", err)
+	}
+	repo := NewRepository(db)
+
+	err := repo.MarkAnalyzed(context.Background(), "t1", Result{BPM: 128.0, Key: "8A"})
+	if err != nil {
+		t.Fatalf("MarkAnalyzed: %v", err)
+	}
+
+	var status string
+	if err := db.QueryRow(`SELECT analysis_status FROM tracks WHERE id='t1'`).Scan(&status); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "failed" {
+		t.Errorf("status = %q, want failed (not revived)", status)
+	}
+}

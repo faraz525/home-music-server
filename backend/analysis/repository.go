@@ -63,7 +63,9 @@ func (r *Repository) ClaimNextPending(ctx context.Context) (*ClaimedTrack, error
 
 // MarkAnalyzed writes a successful result and flips status to 'analyzed'.
 // If the key is empty (unknown), musical_key is set NULL but the row is still
-// considered analyzed.
+// considered analyzed. No-ops on terminal ('failed') or user-edited rows so a
+// late analysis completion can't overwrite a user override that landed while
+// the analyzer was still running.
 func (r *Repository) MarkAnalyzed(ctx context.Context, id string, res Result) error {
 	var key interface{}
 	if res.Key != "" {
@@ -77,7 +79,7 @@ func (r *Repository) MarkAnalyzed(ctx context.Context, id string, res Result) er
             analysis_error = NULL,
             next_retry_at = NULL,
             updated_at = datetime('now')
-        WHERE id = ?
+        WHERE id = ? AND analysis_status NOT IN ('user_edited', 'failed')
     `, res.BPM, res.BPMConfidence, key, res.KeyConfidence, id)
 	return err
 }
