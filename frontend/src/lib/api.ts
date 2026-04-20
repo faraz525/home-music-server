@@ -121,6 +121,9 @@ export const tracksApi = {
     link.click()
     document.body.removeChild(link)
   },
+
+  patch: (id: string, payload: { bpm?: number; musical_key?: string }) =>
+    api.patch(`/api/tracks/${id}`, payload),
 }
 
 // SoundCloud sync API
