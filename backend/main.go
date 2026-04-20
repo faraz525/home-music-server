@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/faraz525/home-music-server/backend/analysis"
 	"github.com/faraz525/home-music-server/backend/auth"
 	"github.com/faraz525/home-music-server/backend/internal/config"
 	idb "github.com/faraz525/home-music-server/backend/internal/db"
@@ -67,6 +68,16 @@ func main() {
 	)
 	fmt.Printf("[CrateDrop] SoundCloud sync manager initialized\n")
 
+	// Initialize analysis (BPM + key detection)
+	analysisRepo := analysis.NewRepository(db.DB)
+	analyzer := analysis.NewAnalyzer(90 * time.Second)
+	analysisManager := analysis.NewManager(analysisRepo, analyzer)
+	if analysis.BinaryAvailable() {
+		fmt.Printf("[CrateDrop] Analysis worker enabled (essentia binary found)\n")
+	} else {
+		fmt.Printf("[CrateDrop] WARNING: streaming_extractor_music not on PATH — analysis disabled\n")
+	}
+
 	// Initialize router and API group
 	r, api := server.NewRouter()
 
@@ -81,6 +92,10 @@ func main() {
 	// Start SoundCloud sync loop in background
 	ctx := context.Background()
 	go soundcloud.StartSyncLoop(ctx, soundcloudManager)
+
+	if analysis.BinaryAvailable() {
+		go analysis.StartLoop(ctx, analysisManager, 10*time.Second)
+	}
 
 	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)
