@@ -189,6 +189,28 @@ docker compose logs backend | grep "upload"
 └── logs/            # Application logs
 ```
 
+### Optional: BPM & Musical Key Analysis
+
+CrateDrop can auto-detect BPM and musical key (Camelot notation) for uploaded
+tracks. This requires the `streaming_extractor_music` binary from essentia on
+the server's `PATH`. The provided Dockerfile installs it via `apt` when the
+image builds.
+
+- **Docker (default):** the image ships with essentia pre-installed. No action
+  needed unless the build logs show `WARNING: essentia-examples not installed`.
+- **Bare metal:**
+  - Debian / Raspberry Pi OS: `sudo apt install essentia-examples`
+  - macOS (dev): `brew install essentia --HEAD`
+
+If the binary is missing, the server still starts — it logs `WARNING:
+streaming_extractor_music not on PATH — analysis disabled` and skips the
+analysis worker. Uploads and playback continue to work normally; tracks stay
+in `pending` status until the binary is available. Install it and restart
+the server to drain the backlog.
+
+Users can override a wrong detection by double-clicking the BPM or Key cell
+in the library view.
+
 ## 🐛 Troubleshooting
 
 ### Common Issues

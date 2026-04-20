@@ -24,6 +24,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --break-system-packages yt-dlp
 
+# BPM / musical-key analysis prereq. `essentia-examples` provides the
+# `streaming_extractor_music` binary that the analysis worker shells out to.
+# Kept as a separate optional layer: if the package is unavailable (e.g. on
+# a repo without contrib/non-free, or a future Debian release that renames it)
+# the image still builds and the analysis worker disables itself with a
+# startup warning. Install it manually later to enable the feature.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends essentia-examples \
+    && rm -rf /var/lib/apt/lists/* \
+    || echo "WARNING: essentia-examples not installed; BPM/key analysis will be disabled."
+
 WORKDIR /app
 COPY --from=builder /out/server /app/server
 COPY soundcloud/downloader.py /app/soundcloud/downloader.py
