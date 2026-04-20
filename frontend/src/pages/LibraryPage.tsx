@@ -1,10 +1,11 @@
 import { tracksApi } from '../lib/api'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { usePlayer } from '../state/player'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MoreHorizontal, ListPlus, Play, Pause, Music, Download, Disc, Search, X } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
-import { useCrates, useTracks, useDeleteTrack, useAddTracksToCrate, useRemoveTracksFromCrate } from '../hooks/useQueries'
+import { useCrates, useTracks, useDeleteTrack, useAddTracksToCrate, useRemoveTracksFromCrate, useUpdateTrackAnalysis } from '../hooks/useQueries'
 
 function MiniVinyl({ spinning = false }: { spinning?: boolean }) {
   return (
@@ -51,6 +52,70 @@ function ConfidenceDot({ status, confidence }: { status?: string; confidence?: n
   return <span className={`inline-block w-2 h-2 rounded-full ${color}`} title={title} />
 }
 
+function EditableCell({
+  value,
+  onSave,
+  validate,
+  display,
+  align = 'right',
+}: {
+  value: string
+  onSave: (next: string) => Promise<void> | void
+  validate: (next: string) => boolean
+  display: ReactNode
+  align?: 'left' | 'right'
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const [saving, setSaving] = useState(false)
+
+  if (!editing) {
+    return (
+      <div
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          setDraft(value)
+          setEditing(true)
+        }}
+        className="cursor-text select-none"
+        title="Double-click to edit"
+      >
+        {display}
+      </div>
+    )
+  }
+
+  const commit = async () => {
+    if (!validate(draft)) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(draft)
+    } finally {
+      setSaving(false)
+      setEditing(false)
+    }
+  }
+
+  return (
+    <input
+      autoFocus
+      value={draft}
+      disabled={saving}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+        else if (e.key === 'Escape') setEditing(false)
+      }}
+      className={`input h-6 px-1 py-0 text-sm w-16 ${align === 'right' ? 'text-right' : ''}`}
+    />
+  )
+}
+
 export function LibraryPage() {
   const { play, isPlaying, toggle, queue, index, setCurrentCrate } = usePlayer()
   const current = queue[index]
@@ -82,6 +147,35 @@ export function LibraryPage() {
   const deleteTrackMutation = useDeleteTrack()
   const addTracksMutation = useAddTracksToCrate()
   const removeTracksMutation = useRemoveTracksFromCrate()
+  const updateAnalysisMutation = useUpdateTrackAnalysis()
+
+  const saveBpm = useCallback(async (trackId: string, raw: string) => {
+    const bpm = parseFloat(raw)
+    if (!isFinite(bpm) || bpm < 50 || bpm > 250) {
+      toast.error('BPM must be between 50 and 250')
+      return
+    }
+    try {
+      await updateAnalysisMutation.mutateAsync({ id: trackId, payload: { bpm } })
+      toast.success('BPM updated')
+    } catch {
+      toast.error('Failed to update BPM')
+    }
+  }, [updateAnalysisMutation, toast])
+
+  const saveKey = useCallback(async (trackId: string, raw: string) => {
+    const normalized = raw.trim().toUpperCase()
+    if (!/^(1[0-2]|[1-9])[AB]$/.test(normalized)) {
+      toast.error('Key must be Camelot notation (e.g. 8A, 12B)')
+      return
+    }
+    try {
+      await updateAnalysisMutation.mutateAsync({ id: trackId, payload: { musical_key: normalized } })
+      toast.success('Key updated')
+    } catch {
+      toast.error('Failed to update key')
+    }
+  }, [updateAnalysisMutation, toast])
 
   useEffect(() => {
     const c = searchParams.get('crate')
@@ -477,16 +571,26 @@ export function LibraryPage() {
               {/* Desktop: Album */}
               <div className="hidden sm:block truncate text-sm text-crate-muted">{t.album || '—'}</div>
 
-              {/* Desktop: BPM */}
+              {/* Desktop: BPM (editable) */}
               <div className="hidden sm:flex items-center justify-end gap-1.5 text-sm text-crate-subtle tabular-nums">
                 <ConfidenceDot status={t.analysis_status} confidence={t.bpm_confidence} />
-                <span>{t.bpm ? t.bpm.toFixed(1) : '—'}</span>
+                <EditableCell
+                  value={t.bpm ? t.bpm.toFixed(1) : ''}
+                  display={<span>{t.bpm ? t.bpm.toFixed(1) : '—'}</span>}
+                  validate={(v) => { const n = parseFloat(v); return isFinite(n) && n >= 50 && n <= 250 }}
+                  onSave={(v) => saveBpm(t.id, v)}
+                />
               </div>
 
-              {/* Desktop: Key */}
+              {/* Desktop: Key (editable) */}
               <div className="hidden sm:flex items-center justify-end gap-1.5 text-sm text-crate-subtle">
                 <ConfidenceDot status={t.analysis_status} confidence={t.key_confidence} />
-                <span>{t.musical_key || '—'}</span>
+                <EditableCell
+                  value={t.musical_key || ''}
+                  display={<span>{t.musical_key || '—'}</span>}
+                  validate={(v) => /^(1[0-2]|[1-9])[AB]$/i.test(v.trim())}
+                  onSave={(v) => saveKey(t.id, v)}
+                />
               </div>
 
               {/* Desktop: Date added */}
