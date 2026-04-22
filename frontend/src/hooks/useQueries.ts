@@ -132,3 +132,15 @@ export function useDeleteCrate() {
     },
   })
 }
+
+export function useUpdateTrackAnalysis() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { bpm?: number; musical_key?: string } }) =>
+      tracksApi.patch(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tracks'] })
+    },
+  })
+}

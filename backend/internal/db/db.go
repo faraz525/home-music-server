@@ -115,5 +115,22 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Check if bpm column exists on tracks table
+	var bpmColCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('tracks')
+		WHERE name='bpm'
+	`).Scan(&bpmColCount)
+	if bpmColCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/003_add_track_analysis.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 003_add_track_analysis: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 003_add_track_analysis: %w", err)
+		}
+	}
+
 	return nil
 }

@@ -24,6 +24,16 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --break-system-packages yt-dlp
 
+# BPM / musical-key analysis is OPT-IN and NOT bundled by default.
+#
+# The worker shells out to essentia's `streaming_extractor_music` binary. It
+# is not in the Debian repos and the official mtgupf/essentia Docker image is
+# amd64-only (won't work on the Raspberry Pi arm64 target).
+#
+# If the binary is present on PATH the worker enables itself automatically; if
+# absent, the server logs "WARNING: streaming_extractor_music not on PATH" and
+# the feature stays disabled. See README for install options.
+
 WORKDIR /app
 COPY --from=builder /out/server /app/server
 COPY soundcloud/downloader.py /app/soundcloud/downloader.py

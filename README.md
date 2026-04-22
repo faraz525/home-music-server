@@ -189,6 +189,42 @@ docker compose logs backend | grep "upload"
 └── logs/            # Application logs
 ```
 
+### Optional: BPM & Musical Key Analysis
+
+CrateDrop can auto-detect BPM and musical key (Camelot notation) on upload, so
+DJs can filter their library by tempo and harmonically compatible keys. The
+worker shells out to `streaming_extractor_music` from
+[essentia](https://essentia.upf.edu/). Users can override a wrong detection by
+double-clicking the BPM or Key cell in the library.
+
+**The Docker image does NOT bundle essentia by default.** The package is not
+in Debian's repos, and the official `mtgupf/essentia` image is amd64-only
+(won't run on the Pi arm64 target). To enable analysis you must provide the
+binary yourself. Three options:
+
+1. **Bind-mount from the host** (simplest). On the host, install essentia
+   into `/opt/essentia/bin/streaming_extractor_music`, then add to
+   `docker-compose.yml`:
+   ```yaml
+   volumes:
+     - /opt/essentia/bin/streaming_extractor_music:/usr/local/bin/streaming_extractor_music:ro
+   ```
+2. **Extend the Dockerfile** with a from-source build of essentia (~15 min
+   build time, adds ~400 MB to the image). Requires `libsamplerate0-dev`,
+   `libyaml-dev`, `libfftw3-dev`, `libavcodec-dev`, `libavformat-dev`,
+   `libavutil-dev`, `libavresample-dev`, `libsamplerate0-dev`, `libtag1-dev`,
+   `libchromaprint-dev`, `python3-dev`, plus the `waf` build system.
+3. **Bare metal deployment** (no Docker):
+   - Debian: clone <https://github.com/MTG/essentia> and run
+     `./waf configure --with-examples && ./waf && sudo ./waf install`.
+   - macOS (dev only): same source build.
+
+If the binary is missing the server still starts and logs `WARNING:
+streaming_extractor_music not on PATH — analysis disabled`. Uploads and
+playback continue to work; tracks stay in `pending` analysis status until
+the binary becomes available. Install it, restart the server, and the
+ticker drains the backlog automatically.
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
