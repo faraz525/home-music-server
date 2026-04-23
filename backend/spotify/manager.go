@@ -675,6 +675,12 @@ func (m *Manager) tryMonochromeDownload(ctx context.Context, tmpDir string, st S
 	if err != nil {
 		return fmt.Errorf("stream info: %w", err)
 	}
+	// Guard against silent downgrades to AAC when the backend account has been
+	// restricted — we only want this path for actual lossless FLAC; anything
+	// else should fall back to yt-dlp.
+	if !strings.EqualFold(info.Codec, "flac") {
+		return fmt.Errorf("unexpected codec %q (quality=%s); want flac", info.Codec, info.Quality)
+	}
 
 	safeName := sanitizeFilename(st.Name)
 	if safeName == "" {
