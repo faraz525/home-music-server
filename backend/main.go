@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/faraz525/home-music-server/backend/analysis"
@@ -73,10 +74,12 @@ func main() {
 	// Initialize monochrome.tf client (optional — enables FLAC downloads via TIDAL)
 	var monoClient *monochrome.Client
 	if cfg.MonochromeAPIURL != "" {
-		monoClient = monochrome.NewClient(cfg.MonochromeAPIURL, 120*time.Second)
-		fmt.Printf("[CrateDrop] Monochrome client enabled (base: %s)\n", cfg.MonochromeAPIURL)
+		hosts := strings.Split(cfg.MonochromeAPIURL, ",")
+		monoClient = monochrome.NewClient(hosts, 120*time.Second)
+		fmt.Printf("[CrateDrop] Monochrome client enabled (%d backend(s): %v)\n",
+			len(monoClient.Hosts()), monoClient.Hosts())
 	} else {
-		fmt.Printf("[CrateDrop] Monochrome client disabled (set MONOCHROME_API_URL to enable)\n")
+		fmt.Printf("[CrateDrop] Monochrome client disabled (set MONOCHROME_API_URL to enable; comma-separated list supported)\n")
 	}
 
 	// Initialize Spotify sync manager

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -17,7 +18,7 @@ func newTestClient(t *testing.T, handler http.Handler) (*Client, *httptest.Serve
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return NewClient(srv.URL, 5*time.Second), srv
+	return NewClient([]string{srv.URL}, 5*time.Second), srv
 }
 
 func TestSearch_ParsesCanonicalResponse(t *testing.T) {
@@ -59,8 +60,6 @@ func TestSearch_ParsesCanonicalResponse(t *testing.T) {
 	if gotPath != "/search/" {
 		t.Errorf("path: got %q, want /search/", gotPath)
 	}
-	// Free-text param is `s=`; the API rejects `i=` (ISRC) despite what the
-	// community docs suggest.
 	if !strings.Contains(gotQuery, "s=") {
 		t.Errorf("query must use s= param: got %q", gotQuery)
 	}
@@ -86,7 +85,7 @@ func TestSearch_ParsesCanonicalResponse(t *testing.T) {
 }
 
 func TestSearch_EmptyQueryRejected(t *testing.T) {
-	c := NewClient("http://example.invalid", time.Second)
+	c := NewClient([]string{"http://example.invalid"}, time.Second)
 	if _, err := c.Search(context.Background(), "", 10); err == nil {
 		t.Fatal("expected error for empty query")
 	}
@@ -119,22 +118,67 @@ func TestSearch_HTTPError(t *testing.T) {
 	}
 }
 
-func TestSearch_UpstreamAPIErrorSurfaces(t *testing.T) {
-	// The real service frequently returns 200 with `{"detail":"Upstream API error"}`
-	// when TIDAL has banned the backend account. Our client treats this as a
-	// successful-but-empty search (no items), which lets the caller fall back
-	// gracefully. Callers that need to know this happened should check for
-	// zero results.
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestSearch_UpstreamAPIErrorTriggersFailover(t *testing.T) {
+	// Monochrome mirrors return HTTP 200 with `{"detail":"Upstream API error"}`
+	// when the backend's TIDAL account is banned. Our client must detect this
+	// and fail over to the next configured host — which is the whole point of
+	// multi-backend support.
+	brokenHits := int32(0)
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&brokenHits, 1)
 		fmt.Fprint(w, `{"detail":"Upstream API error"}`)
-	})
-	c, _ := newTestClient(t, handler)
+	}))
+	t.Cleanup(broken.Close)
+
+	healthyHits := int32(0)
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&healthyHits, 1)
+		fmt.Fprint(w, `{"data":{"items":[{"id":1,"title":"ok","duration":30,"isrc":"X","audioQuality":"LOSSLESS","artists":[{"name":"A"}],"album":{"title":"B"}}]}}`)
+	}))
+	t.Cleanup(healthy.Close)
+
+	c := NewClient([]string{broken.URL, healthy.URL}, 5*time.Second)
 	matches, err := c.Search(context.Background(), "anything", 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(matches) != 0 {
-		t.Errorf("expected 0 matches when upstream reports error, got %d", len(matches))
+	if len(matches) != 1 || matches[0].Title != "ok" {
+		t.Fatalf("expected 1 match from healthy host, got %+v", matches)
+	}
+	if atomic.LoadInt32(&brokenHits) != 1 || atomic.LoadInt32(&healthyHits) != 1 {
+		t.Errorf("expected both hosts hit once: broken=%d healthy=%d",
+			atomic.LoadInt32(&brokenHits), atomic.LoadInt32(&healthyHits))
+	}
+}
+
+func TestSearch_AllHostsFailAggregates(t *testing.T) {
+	a := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"detail":"Upstream API error"}`)
+	}))
+	t.Cleanup(a.Close)
+	b := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(b.Close)
+
+	c := NewClient([]string{a.URL, b.URL}, 5*time.Second)
+	_, err := c.Search(context.Background(), "anything", 10)
+	if err == nil {
+		t.Fatal("expected aggregated error when all hosts fail")
+	}
+	if !strings.Contains(err.Error(), "all backends failed") {
+		t.Errorf("error should mention 'all backends failed': %v", err)
+	}
+}
+
+func TestNewClient_TrimsAndFiltersBaseURLs(t *testing.T) {
+	c := NewClient([]string{"  https://a.example.com/  ", "", "https://b.example.com"}, time.Second)
+	hosts := c.Hosts()
+	if len(hosts) != 2 {
+		t.Fatalf("expected 2 hosts, got %d: %v", len(hosts), hosts)
+	}
+	if hosts[0] != "https://a.example.com" || hosts[1] != "https://b.example.com" {
+		t.Errorf("hosts wrong: %+v", hosts)
 	}
 }
 
@@ -173,6 +217,31 @@ func TestGetStreamInfo_DecodesBase64Manifest(t *testing.T) {
 	}
 }
 
+func TestGetStreamInfo_FailsOverBetweenHosts(t *testing.T) {
+	// First host: upstream error. Second host: valid manifest. Expect success
+	// and the second URL to be returned.
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"detail":"Upstream API error"}`)
+	}))
+	t.Cleanup(broken.Close)
+
+	manifestJSON := `{"mimeType":"audio/flac","codecs":"flac","encryptionType":"NONE","urls":["https://cdn.example.com/good.flac"]}`
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"data":{"audioQuality":"LOSSLESS","manifestMimeType":"application/vnd.tidal.bts","manifest":%q}}`,
+			base64.StdEncoding.EncodeToString([]byte(manifestJSON)))
+	}))
+	t.Cleanup(healthy.Close)
+
+	c := NewClient([]string{broken.URL, healthy.URL}, 5*time.Second)
+	info, err := c.GetStreamInfo(context.Background(), 42, QualityLossless)
+	if err != nil {
+		t.Fatalf("GetStreamInfo: %v", err)
+	}
+	if info.URL != "https://cdn.example.com/good.flac" {
+		t.Errorf("expected URL from healthy host, got %q", info.URL)
+	}
+}
+
 func TestGetStreamInfo_RejectsDASHManifest(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"data":{"manifestMimeType":"application/dash+xml","manifest":"PHhtbD4="}}`)
@@ -202,7 +271,7 @@ func TestGetStreamInfo_RejectsEncryptedStream(t *testing.T) {
 }
 
 func TestGetStreamInfo_RejectsInvalidID(t *testing.T) {
-	c := NewClient("http://example.invalid", time.Second)
+	c := NewClient([]string{"http://example.invalid"}, time.Second)
 	if _, err := c.GetStreamInfo(context.Background(), 0, QualityLossless); err == nil {
 		t.Fatal("expected error on id=0")
 	}

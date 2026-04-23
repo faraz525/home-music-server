@@ -21,27 +21,51 @@ const (
 	QualityLow      = "LOW"
 )
 
-// expected manifest type for plain lossless FLAC (TIDAL BTS container).
+// manifestTypeBTS is the mime type for plain lossless FLAC (TIDAL BTS container).
 const manifestTypeBTS = "application/vnd.tidal.bts"
 
-// Client talks to a monochrome.tf-compatible instance of the hifi-api.
-// Zero value is not usable — use NewClient.
+// defaultUserAgent mimics a common desktop Chrome. Several community mirrors
+// sit behind Cloudflare and 403 requests from Go's default `Go-http-client/1.1`
+// UA — this gets us through.
+const defaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+// Client talks to one or more monochrome.tf-compatible hifi-api instances.
+// Multiple base URLs are tried in order — backends get TIDAL-banned regularly,
+// so the monochrome.tf website itself juggles ~10 mirrors. Zero value is not
+// usable — use NewClient.
 type Client struct {
-	baseURL string
-	http    *http.Client
+	baseURLs  []string
+	http      *http.Client
+	userAgent string
 }
 
-// NewClient returns a client pointing at baseURL (e.g. "https://api.monochrome.tf").
-// timeout bounds individual HTTP requests; use >= 60s to accommodate the ~10MB
-// CDN stream requests.
-func NewClient(baseURL string, timeout time.Duration) *Client {
+// NewClient returns a client with failover across baseURLs. Hosts are tried in
+// order per request; the first to return a valid response wins. Empty strings
+// are filtered; trailing slashes trimmed. timeout bounds each individual HTTP
+// request — use >= 60s to accommodate CDN FLAC downloads.
+func NewClient(baseURLs []string, timeout time.Duration) *Client {
+	cleaned := make([]string, 0, len(baseURLs))
+	for _, u := range baseURLs {
+		u = strings.TrimRight(strings.TrimSpace(u), "/")
+		if u != "" {
+			cleaned = append(cleaned, u)
+		}
+	}
 	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    &http.Client{Timeout: timeout},
+		baseURLs:  cleaned,
+		http:      &http.Client{Timeout: timeout},
+		userAgent: defaultUserAgent,
 	}
 }
 
-// TrackMatch is a normalized catalog hit returned by Search*.
+// Hosts returns the configured base URLs (for logging).
+func (c *Client) Hosts() []string {
+	out := make([]string, len(c.baseURLs))
+	copy(out, c.baseURLs)
+	return out
+}
+
+// TrackMatch is a normalized catalog hit returned by Search.
 type TrackMatch struct {
 	TidalID     int
 	ISRC        string
@@ -52,7 +76,7 @@ type TrackMatch struct {
 	Quality     string // upstream audioQuality: HI_RES_LOSSLESS, LOSSLESS, HIGH, LOW
 }
 
-// StreamInfo describes a resolved, signed CDN URL for the actual audio bytes.
+// StreamInfo describes a resolved, signed CDN URL for the audio bytes.
 type StreamInfo struct {
 	URL      string
 	Quality  string // quality upstream actually served — may be below what was requested
@@ -71,29 +95,23 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]TrackMa
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
-	return c.doSearch(ctx, url.Values{
+	q := url.Values{
 		"s":     {query},
 		"limit": {fmt.Sprintf("%d", limit)},
+	}
+	return tryAllHosts(c.baseURLs, func(base string) ([]TrackMatch, error) {
+		return c.searchOne(ctx, base, q)
 	})
 }
 
-func (c *Client) doSearch(ctx context.Context, q url.Values) ([]TrackMatch, error) {
-	u := c.baseURL + "/search/?" + q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+func (c *Client) searchOne(ctx context.Context, base string, q url.Values) ([]TrackMatch, error) {
+	u := base + "/search/?" + q.Encode()
+	body, err := c.fetchJSON(ctx, u)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("search request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("search failed: status %d: %s", resp.StatusCode, string(body))
-	}
 	var parsed searchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("decode search response: %w", err)
 	}
 	matches := make([]TrackMatch, 0, len(parsed.Data.Items))
@@ -147,22 +165,19 @@ func (c *Client) GetStreamInfo(ctx context.Context, tidalID int, quality string)
 	if quality == "" {
 		quality = QualityLossless
 	}
-	u := fmt.Sprintf("%s/track/?id=%d&quality=%s", c.baseURL, tidalID, url.QueryEscape(quality))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	return tryAllHosts(c.baseURLs, func(base string) (*StreamInfo, error) {
+		return c.streamOne(ctx, base, tidalID, quality)
+	})
+}
+
+func (c *Client) streamOne(ctx context.Context, base string, tidalID int, quality string) (*StreamInfo, error) {
+	u := fmt.Sprintf("%s/track/?id=%d&quality=%s", base, tidalID, url.QueryEscape(quality))
+	body, err := c.fetchJSON(ctx, u)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("track request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("track fetch failed: status %d: %s", resp.StatusCode, string(body))
-	}
 	var parsed playbackResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("decode playback response: %w", err)
 	}
 	if parsed.Data.ManifestMimeType != manifestTypeBTS {
@@ -203,6 +218,75 @@ type manifestContent struct {
 	Codecs         string   `json:"codecs"`
 	EncryptionType string   `json:"encryptionType"`
 	URLs           []string `json:"urls"`
+}
+
+// fetchJSON GETs u, validates status, and detects FastAPI-style
+// `{"detail":"..."}` upstream errors that come back with HTTP 200 (common when
+// a monochrome mirror's TIDAL account is banned — it still serves 200 but
+// returns no data). Returns the raw JSON body for caller-side decoding.
+func (c *Client) fetchJSON(ctx context.Context, u string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, truncate(body, 200))
+	}
+	if detail := upstreamDetail(body); detail != "" {
+		return nil, fmt.Errorf("upstream error: %s", detail)
+	}
+	return body, nil
+}
+
+// upstreamDetail returns the `detail` field from a FastAPI-style error body, or
+// "" if the response contains real `data`.
+func upstreamDetail(body []byte) string {
+	var probe struct {
+		Detail string          `json:"detail"`
+		Data   json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return ""
+	}
+	if probe.Detail != "" && len(probe.Data) == 0 {
+		return probe.Detail
+	}
+	return ""
+}
+
+func truncate(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[:n]) + "…"
+}
+
+// tryAllHosts runs fn against each base in turn and returns the first success.
+// If every host fails, a single error aggregating them all is returned.
+func tryAllHosts[T any](bases []string, fn func(base string) (T, error)) (T, error) {
+	var zero T
+	if len(bases) == 0 {
+		return zero, fmt.Errorf("no monochrome backends configured")
+	}
+	errs := make([]string, 0, len(bases))
+	for _, base := range bases {
+		result, err := fn(base)
+		if err == nil {
+			return result, nil
+		}
+		errs = append(errs, fmt.Sprintf("%s: %v", base, err))
+	}
+	return zero, fmt.Errorf("all backends failed: %s", strings.Join(errs, "; "))
 }
 
 // Download streams streamURL to destPath. On any error the partial file is removed.
