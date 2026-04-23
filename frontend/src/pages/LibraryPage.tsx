@@ -139,10 +139,31 @@ export function LibraryPage() {
   }, [searchInput])
 
   const { data: crates, isLoading: loadingCrates } = useCrates()
-  const { data: tracks, isLoading: loadingTracks } = useTracks({
+  const {
+    data: tracks,
+    isLoading: loadingTracks,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useTracks({
     q: debouncedSearch || undefined,
     selectedCrate,
   })
+
+  const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!sentinelEl) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    io.observe(sentinelEl)
+    return () => io.disconnect()
+  }, [sentinelEl, hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const deleteTrackMutation = useDeleteTrack()
   const addTracksMutation = useAddTracksToCrate()
@@ -364,7 +385,9 @@ export function LibraryPage() {
         </div>
         {tracks?.tracks && tracks.tracks.length > 0 && (
           <div className="text-sm text-crate-subtle">
-            {tracks.tracks.length} track{tracks.tracks.length !== 1 ? 's' : ''}
+            {tracks.total > tracks.tracks.length
+              ? `${tracks.tracks.length} of ${tracks.total} tracks`
+              : `${tracks.total} track${tracks.total !== 1 ? 's' : ''}`}
           </div>
         )}
       </div>
@@ -685,6 +708,16 @@ export function LibraryPage() {
             </div>
           )
         })}
+
+        {/* Infinite-scroll sentinel + status row */}
+        {!loadingTracks && tracks?.tracks && tracks.tracks.length > 0 && hasNextPage && (
+          <div
+            ref={setSentinelEl}
+            className="px-4 py-6 text-center text-sm text-crate-subtle"
+          >
+            {isFetchingNextPage ? 'Loading more…' : 'Scroll for more'}
+          </div>
+        )}
       </div>
     </div>
   )
