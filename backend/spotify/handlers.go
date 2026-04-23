@@ -43,11 +43,13 @@ func (h *Handlers) GetConfig(c *gin.Context) {
 		"liked_songs_playlist_id": cfg.LikedSongsPlaylistID,
 		"last_sync_at":            cfg.LastSyncAt,
 		"client_id":               clientID,
+		"playlist_pattern":        cfg.PlaylistPattern,
 	})
 }
 
 type UpdateConfigRequest struct {
-	Enabled bool `json:"enabled"`
+	Enabled         bool    `json:"enabled"`
+	PlaylistPattern *string `json:"playlist_pattern"`
 }
 
 func (h *Handlers) UpdateConfig(c *gin.Context) {
@@ -63,7 +65,7 @@ func (h *Handlers) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	if err := h.manager.SaveSyncConfig(c.Request.Context(), userID.(string), req.Enabled); err != nil {
+	if err := h.manager.SaveSyncConfig(c.Request.Context(), userID.(string), req.Enabled, req.PlaylistPattern); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal_error", "message": err.Error()}})
 		return
 	}
@@ -109,7 +111,7 @@ func (h *Handlers) Disconnect(c *gin.Context) {
 
 func (h *Handlers) TriggerSync(c *gin.Context) {
 	go func() {
-		if err := h.manager.SyncLikes(context.Background()); err != nil {
+		if err := h.manager.Sync(context.Background()); err != nil {
 			fmt.Printf("[Spotify] Manual sync failed: %v\n", err)
 		}
 	}()

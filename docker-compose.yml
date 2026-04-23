@@ -13,6 +13,8 @@ services:
       SQLITE_PATH: /data/db/cratedrop.sqlite
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       REFRESH_SECRET: ${REFRESH_SECRET:?REFRESH_SECRET must be set}
+      MONOCHROME_API_URL: ${MONOCHROME_API_URL:-}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
     user: "1000:1000"
     volumes:
       - /mnt/ssd/apps/cratedrop:/data:rw

@@ -20,7 +20,7 @@ func StartSyncLoop(ctx context.Context, manager *Manager) {
 		fmt.Println("[Spotify] Sync loop cancelled before initial run")
 		return
 	case <-initialDelay.C:
-		if err := manager.SyncLikes(ctx); err != nil {
+		if err := manager.Sync(ctx); err != nil {
 			fmt.Printf("[Spotify] Initial sync failed: %v\n", err)
 		}
 	}
@@ -31,7 +31,7 @@ func StartSyncLoop(ctx context.Context, manager *Manager) {
 			fmt.Println("[Spotify] Sync loop stopped")
 			return
 		case <-ticker.C:
-			if err := manager.SyncLikes(ctx); err != nil {
+			if err := manager.Sync(ctx); err != nil {
 				fmt.Printf("[Spotify] Scheduled sync failed: %v\n", err)
 			}
 		}

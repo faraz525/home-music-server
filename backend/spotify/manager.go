@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -73,10 +74,17 @@ func (m *Manager) GetSyncConfig(ctx context.Context) (*SyncConfig, error) {
 	return m.repo.GetSyncConfig(ctx)
 }
 
-func (m *Manager) SaveSyncConfig(ctx context.Context, ownerUserID string, enabled bool) error {
+func (m *Manager) SaveSyncConfig(ctx context.Context, ownerUserID string, enabled bool, playlistPattern *string) error {
+	if playlistPattern != nil && *playlistPattern != "" {
+		if _, err := path.Match(*playlistPattern, ""); err != nil {
+			return fmt.Errorf("invalid playlist pattern: %w", err)
+		}
+	}
+
 	cfg := &SyncConfig{
-		OwnerUserID: ownerUserID,
-		Enabled:     enabled,
+		OwnerUserID:     ownerUserID,
+		Enabled:         enabled,
+		PlaylistPattern: playlistPattern,
 	}
 
 	existing, _ := m.repo.GetSyncConfig(ctx)
@@ -88,6 +96,18 @@ func (m *Manager) SaveSyncConfig(ctx context.Context, ownerUserID string, enable
 	}
 
 	return m.repo.UpsertSyncConfig(ctx, cfg)
+}
+
+// Sync dispatches to SyncPlaylists when a pattern is configured, otherwise SyncLikes.
+func (m *Manager) Sync(ctx context.Context) error {
+	cfg, err := m.repo.GetSyncConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get sync config: %w", err)
+	}
+	if cfg != nil && cfg.PlaylistPattern != nil && *cfg.PlaylistPattern != "" {
+		return m.SyncPlaylists(ctx)
+	}
+	return m.SyncLikes(ctx)
 }
 
 func (m *Manager) GetSyncHistory(ctx context.Context, limit int) ([]*SyncHistory, error) {
@@ -144,11 +164,12 @@ func (m *Manager) ExchangeCodeForToken(ctx context.Context, code, codeVerifier, 
 		Enabled:        false, // User must explicitly enable
 	}
 
-	// Preserve existing playlist ID if config exists
+	// Preserve existing fields if config exists
 	existing, _ := m.repo.GetSyncConfig(ctx)
 	if existing != nil {
 		cfg.LikedSongsPlaylistID = existing.LikedSongsPlaylistID
 		cfg.Enabled = existing.Enabled
+		cfg.PlaylistPattern = existing.PlaylistPattern
 	}
 
 	return m.repo.UpsertSyncConfig(ctx, cfg)
@@ -728,6 +749,169 @@ func absInt(x int) int {
 		return -x
 	}
 	return x
+}
+
+func (m *Manager) SyncPlaylists(ctx context.Context) error {
+	if !m.syncMutex.TryLock() {
+		fmt.Println("[Spotify] Sync already in progress, skipping")
+		return nil
+	}
+	defer m.syncMutex.Unlock()
+
+	cfg, err := m.repo.GetSyncConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get sync config: %w", err)
+	}
+	if cfg == nil {
+		fmt.Println("[Spotify] Sync not configured, skipping")
+		return nil
+	}
+	if !cfg.Enabled {
+		fmt.Println("[Spotify] Sync disabled, skipping")
+		return nil
+	}
+	if cfg.AccessToken == nil || *cfg.AccessToken == "" {
+		return fmt.Errorf("access token not configured")
+	}
+	if cfg.PlaylistPattern == nil || *cfg.PlaylistPattern == "" {
+		return fmt.Errorf("no playlist pattern configured")
+	}
+
+	pattern := *cfg.PlaylistPattern
+	fmt.Printf("[Spotify] Starting playlist sync with pattern: %s\n", pattern)
+	started := time.Now()
+
+	spotifyPlaylists, err := m.FetchUserPlaylists(ctx)
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to fetch playlists: %v", err)
+		m.repo.RecordSync(ctx, started, 0, 0, &errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	var matched []SpotifyPlaylist
+	for _, p := range spotifyPlaylists {
+		if matchesPattern(pattern, p.Name) {
+			matched = append(matched, p)
+			fmt.Printf("[Spotify] Matched playlist: %s\n", p.Name)
+		}
+	}
+
+	if len(matched) == 0 {
+		fmt.Printf("[Spotify] No playlists matched pattern %q\n", pattern)
+		m.repo.UpdateLastSync(ctx)
+		m.repo.RecordSync(ctx, started, 0, 0, nil)
+		return nil
+	}
+
+	tracksAdded := 0
+	tracksSkipped := 0
+
+	for _, sp := range matched {
+		localPlaylistID, err := m.ensureSpotifyPlaylist(ctx, cfg.OwnerUserID, sp.ID, sp.Name)
+		if err != nil {
+			fmt.Printf("[Spotify] Failed to ensure local playlist for %s: %v\n", sp.Name, err)
+			continue
+		}
+
+		var newTrackIDs []string
+		offset := 0
+		limit := 50
+
+		for {
+			spTracks, total, err := m.FetchPlaylistTracks(ctx, sp.ID, limit, offset)
+			if err != nil {
+				fmt.Printf("[Spotify] Failed to fetch tracks for playlist %s: %v\n", sp.Name, err)
+				break
+			}
+
+			for _, st := range spTracks {
+				synced, err := m.repo.IsSpotifyTrackSynced(ctx, st.ID)
+				if err != nil {
+					fmt.Printf("[Spotify] Error checking if track synced: %v\n", err)
+				}
+				if synced {
+					existingTrackID, err := m.repo.GetSyncedTrackID(ctx, st.ID)
+					if err == nil && existingTrackID != "" {
+						newTrackIDs = append(newTrackIDs, existingTrackID)
+					}
+					tracksSkipped++
+					continue
+				}
+
+				trackID, err := m.downloadAndImportTrack(ctx, cfg.OwnerUserID, st)
+				if err != nil {
+					fmt.Printf("[Spotify] Skipping track %s: %v\n", st.Name, err)
+					tracksSkipped++
+					continue
+				}
+
+				if err := m.repo.RecordSyncedTrack(ctx, st.ID, trackID); err != nil {
+					fmt.Printf("[Spotify] Warning: failed to record synced track: %v\n", err)
+				}
+
+				newTrackIDs = append(newTrackIDs, trackID)
+				tracksAdded++
+				fmt.Printf("[Spotify] Imported: %s - %s\n", getArtistName(st), st.Name)
+			}
+
+			offset += limit
+			if offset >= total {
+				break
+			}
+		}
+
+		if len(newTrackIDs) > 0 {
+			req := &imodels.AddTracksToPlaylistRequest{TrackIDs: newTrackIDs}
+			if err := m.playlistsManager.AddTracksToPlaylist(localPlaylistID, cfg.OwnerUserID, req); err != nil {
+				fmt.Printf("[Spotify] Warning: failed to add tracks to playlist %s: %v\n", sp.Name, err)
+			}
+		}
+
+		m.repo.UpdateSyncedPlaylistLastSync(ctx, sp.ID)
+	}
+
+	m.repo.UpdateLastSync(ctx)
+	m.repo.RecordSync(ctx, started, tracksAdded, tracksSkipped, nil)
+
+	fmt.Printf("[Spotify] Playlist sync complete: %d added, %d skipped\n", tracksAdded, tracksSkipped)
+	return nil
+}
+
+func (m *Manager) ensureSpotifyPlaylist(ctx context.Context, ownerUserID, spotifyPlaylistID, name string) (string, error) {
+	existing, err := m.repo.GetSyncedPlaylists(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range existing {
+		if p.SpotifyPlaylistID == spotifyPlaylistID {
+			return p.LocalPlaylistID, nil
+		}
+	}
+
+	desc := fmt.Sprintf("Auto-synced from Spotify playlist: %s", name)
+	isPublic := false
+	createReq := &imodels.CreatePlaylistRequest{
+		Name:        name,
+		Description: &desc,
+		IsPublic:    &isPublic,
+	}
+
+	playlist, err := m.playlistsManager.CreatePlaylist(ownerUserID, createReq)
+	if err != nil {
+		return "", err
+	}
+
+	if err := m.repo.AddSyncedPlaylist(ctx, spotifyPlaylistID, playlist.ID, name); err != nil {
+		fmt.Printf("[Spotify] Warning: failed to record synced playlist: %v\n", err)
+	}
+
+	fmt.Printf("[Spotify] Created local playlist: %s (%s)\n", playlist.Name, playlist.ID)
+	return playlist.ID, nil
+}
+
+func matchesPattern(pattern, name string) bool {
+	matched, err := path.Match(strings.ToLower(pattern), strings.ToLower(name))
+	return err == nil && matched
 }
 
 // GetSyncedPlaylists returns all synced Spotify playlists

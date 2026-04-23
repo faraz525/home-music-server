@@ -25,6 +25,7 @@ type SyncConfig struct {
 	OwnerUserID          string     `json:"owner_user_id"`
 	LikedSongsPlaylistID *string    `json:"liked_songs_playlist_id"`
 	Enabled              bool       `json:"enabled"`
+	PlaylistPattern      *string    `json:"playlist_pattern,omitempty"`
 	LastSyncAt           *time.Time `json:"last_sync_at"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
@@ -32,15 +33,15 @@ type SyncConfig struct {
 
 func (r *Repository) GetSyncConfig(ctx context.Context) (*SyncConfig, error) {
 	var cfg SyncConfig
-	var accessToken, refreshToken, playlistID sql.NullString
+	var accessToken, refreshToken, playlistID, playlistPattern sql.NullString
 	var tokenExpiresAt, lastSyncAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, access_token, refresh_token, token_expires_at, owner_user_id, 
-                liked_songs_playlist_id, enabled, last_sync_at, created_at, updated_at
+		`SELECT id, access_token, refresh_token, token_expires_at, owner_user_id,
+                liked_songs_playlist_id, enabled, playlist_pattern, last_sync_at, created_at, updated_at
          FROM spotify_sync_config WHERE id = 1`,
 	).Scan(&cfg.ID, &accessToken, &refreshToken, &tokenExpiresAt, &cfg.OwnerUserID,
-		&playlistID, &cfg.Enabled, &lastSyncAt, &cfg.CreatedAt, &cfg.UpdatedAt)
+		&playlistID, &cfg.Enabled, &playlistPattern, &lastSyncAt, &cfg.CreatedAt, &cfg.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -61,6 +62,9 @@ func (r *Repository) GetSyncConfig(ctx context.Context) (*SyncConfig, error) {
 	if playlistID.Valid {
 		cfg.LikedSongsPlaylistID = &playlistID.String
 	}
+	if playlistPattern.Valid {
+		cfg.PlaylistPattern = &playlistPattern.String
+	}
 	if lastSyncAt.Valid {
 		cfg.LastSyncAt = &lastSyncAt.Time
 	}
@@ -72,9 +76,9 @@ func (r *Repository) UpsertSyncConfig(ctx context.Context, cfg *SyncConfig) erro
 	now := time.Now()
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO spotify_sync_config (id, access_token, refresh_token, token_expires_at, owner_user_id, 
-                                          liked_songs_playlist_id, enabled, created_at, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO spotify_sync_config (id, access_token, refresh_token, token_expires_at, owner_user_id,
+                                          liked_songs_playlist_id, enabled, playlist_pattern, created_at, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
             access_token = excluded.access_token,
             refresh_token = excluded.refresh_token,
@@ -82,11 +86,21 @@ func (r *Repository) UpsertSyncConfig(ctx context.Context, cfg *SyncConfig) erro
             owner_user_id = excluded.owner_user_id,
             liked_songs_playlist_id = excluded.liked_songs_playlist_id,
             enabled = excluded.enabled,
+            playlist_pattern = excluded.playlist_pattern,
             updated_at = excluded.updated_at`,
 		cfg.AccessToken, cfg.RefreshToken, cfg.TokenExpiresAt, cfg.OwnerUserID,
-		cfg.LikedSongsPlaylistID, cfg.Enabled, now, now,
+		cfg.LikedSongsPlaylistID, cfg.Enabled, cfg.PlaylistPattern, now, now,
 	)
 	return err
+}
+
+func (r *Repository) GetSyncedTrackID(ctx context.Context, spotifyID string) (string, error) {
+	var trackID string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT track_id FROM spotify_synced_tracks WHERE spotify_id = ?`,
+		spotifyID,
+	).Scan(&trackID)
+	return trackID, err
 }
 
 func (r *Repository) UpdateTokens(ctx context.Context, accessToken, refreshToken string, expiresAt time.Time) error {

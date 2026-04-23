@@ -42,6 +42,7 @@ export function SpotifyPage() {
   const [syncing, setSyncing] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [enabled, setEnabled] = useState(false)
+  const [playlistPattern, setPlaylistPattern] = useState('')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -53,6 +54,7 @@ export function SpotifyPage() {
       setConfig(configRes.data)
       setHistory(historyRes.data?.history || [])
       setEnabled(configRes.data?.enabled || false)
+      setPlaylistPattern(configRes.data?.playlist_pattern || '')
     } catch {
       toast.error('Failed to load Spotify configuration')
     } finally {
@@ -150,7 +152,10 @@ export function SpotifyPage() {
   async function handleSave() {
     setSaving(true)
     try {
-      await spotifyApi.updateConfig({ enabled })
+      await spotifyApi.updateConfig({
+        enabled,
+        playlist_pattern: playlistPattern.trim() || null,
+      })
       toast.success('Spotify configuration saved')
       fetchData()
     } catch {
@@ -197,7 +202,7 @@ export function SpotifyPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-display font-bold text-crate-cream">Spotify Sync</h1>
-        <p className="text-crate-muted mt-1">Auto-sync your Spotify liked songs to CrateDrop</p>
+        <p className="text-crate-muted mt-1">Auto-sync your Spotify playlists to CrateDrop</p>
       </div>
 
       {loading || connecting ? (
@@ -278,7 +283,7 @@ export function SpotifyPage() {
                 <div className="text-center py-6">
                   <Music2 size={48} className="mx-auto text-green-500 mb-4" />
                   <p className="text-crate-muted mb-6">
-                    Connect your Spotify account to sync your liked songs automatically.
+                    Connect your Spotify account to sync your playlists automatically.
                   </p>
                   {!config?.client_id ? (
                     <div className="p-4 bg-crate-amber/10 border border-crate-amber/20 rounded-xl text-sm text-crate-amber">
@@ -315,7 +320,23 @@ export function SpotifyPage() {
                     </span>
                   </div>
 
-                  <div className="pt-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-crate-cream">
+                      Playlist Pattern
+                    </label>
+                    <input
+                      type="text"
+                      value={playlistPattern}
+                      onChange={e => setPlaylistPattern(e.target.value)}
+                      placeholder="e.g. USB-* (leave blank to sync liked songs)"
+                      className="input w-full"
+                    />
+                    <p className="text-xs text-crate-muted">
+                      Glob pattern to match Spotify playlist names. Use <code className="text-crate-amber">*</code> as a wildcard (e.g. <code className="text-crate-amber">USB-*</code> matches USB-House, USB-Techno). Leave blank to sync your liked songs instead.
+                    </p>
+                  </div>
+
+                  <div className="pt-2">
                     <button
                       onClick={handleSave}
                       disabled={saving}
@@ -402,10 +423,10 @@ export function SpotifyPage() {
             <h3 className="text-sm font-medium text-crate-cream mb-3">How It Works</h3>
             <ul className="text-sm text-crate-muted space-y-2">
               <li>1. Connect your Spotify account using the button above</li>
-              <li>2. Enable automatic sync to run daily</li>
-              <li>3. Liked songs will be searched and downloaded as MP3s</li>
-              <li>4. Tracks are added to a "Spotify Liked Songs" crate</li>
-              <li>5. Already-synced tracks are skipped automatically</li>
+              <li>2. Set a playlist pattern (e.g. USB-*) to sync matching playlists, or leave blank for liked songs</li>
+              <li>3. Enable automatic sync to run daily</li>
+              <li>4. Tracks are downloaded as FLAC (via monochrome) or MP3 (via yt-dlp fallback)</li>
+              <li>5. Already-synced tracks are skipped and linked to new playlists automatically</li>
             </ul>
           </div>
         </>

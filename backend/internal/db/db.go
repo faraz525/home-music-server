@@ -145,5 +145,22 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Check if playlist_pattern column exists on spotify_sync_config table
+	var patternColCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('spotify_sync_config')
+		WHERE name='playlist_pattern'
+	`).Scan(&patternColCount)
+	if patternColCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/005_add_playlist_pattern.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 005_add_playlist_pattern: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 005_add_playlist_pattern: %w", err)
+		}
+	}
+
 	return nil
 }

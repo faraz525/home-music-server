@@ -167,6 +167,7 @@ export type SpotifyConfig = {
   liked_songs_playlist_id?: string
   last_sync_at?: string
   client_id?: string
+  playlist_pattern?: string
 }
 
 export type SpotifySyncHistory = {
@@ -182,7 +183,7 @@ export const spotifyApi = {
   getConfig: () =>
     api.get<SpotifyConfig>('/api/spotify/config'),
 
-  updateConfig: (data: { enabled: boolean }) =>
+  updateConfig: (data: { enabled: boolean; playlist_pattern?: string | null }) =>
     api.put('/api/spotify/config', data),
 
   exchangeToken: (data: { code: string; code_verifier: string; redirect_uri: string }) =>
