@@ -8,6 +8,7 @@ import { CommunityPage } from './pages/CommunityPage'
 import { UploadPage } from './pages/UploadPage'
 import { AdminPage } from './pages/AdminPage'
 import { SoundCloudPage } from './pages/SoundCloudPage'
+import { SpotifyPage } from './pages/SpotifyPage'
 import { NotFound } from './pages/NotFound'
 import { AuthProvider, useAuth } from './state/auth'
 
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/soundcloud" element={<SoundCloudPage />} />
+          <Route path="/spotify" element={<SpotifyPage />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
