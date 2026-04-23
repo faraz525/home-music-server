@@ -115,5 +115,52 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Check if bpm column exists on tracks table
+	var bpmColCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('tracks')
+		WHERE name='bpm'
+	`).Scan(&bpmColCount)
+	if bpmColCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/003_add_track_analysis.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 003_add_track_analysis: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 003_add_track_analysis: %w", err)
+		}
+	}
+
+	// Check if spotify_sync_config table exists
+	var spTableCount int
+	_ = d.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='spotify_sync_config'").Scan(&spTableCount)
+	if spTableCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/004_add_spotify_sync.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 004_add_spotify_sync: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 004_add_spotify_sync: %w", err)
+		}
+	}
+
+	// Check if playlist_pattern column exists on spotify_sync_config table
+	var patternColCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('spotify_sync_config')
+		WHERE name='playlist_pattern'
+	`).Scan(&patternColCount)
+	if patternColCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/005_add_playlist_pattern.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 005_add_playlist_pattern: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 005_add_playlist_pattern: %w", err)
+		}
+	}
+
 	return nil
 }

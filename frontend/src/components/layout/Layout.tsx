@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link, useLocation } from 'react-router-dom'
-import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe, Disc, Cloud } from 'lucide-react'
+import { Library, LogOut, Settings, UploadCloud, Folder, Menu, X, FolderOpen, Globe, Disc, Cloud, Music2 } from 'lucide-react'
 import { useAuth } from '../../state/auth'
 import { PlayerBar } from '../player/PlayerBar'
 import { useCallback, useEffect, useState } from 'react'
@@ -103,6 +103,7 @@ export function Layout() {
             <>
               <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
               <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} />
+              <NavItem to="/spotify" label="Spotify" icon={<Music2 size={18} />} />
             </>
           )}
 
@@ -187,6 +188,7 @@ export function Layout() {
               <>
                 <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} />
                 <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} />
+                <NavItem to="/spotify" label="Spotify" icon={<Music2 size={18} />} />
               </>
             )}
 
@@ -292,6 +294,7 @@ function SidebarContent({ user, logout, onNavigate, crates, selectedCrateId }: {
           <>
             <NavItem to="/admin" label="Admin" icon={<Settings size={18} />} onClick={onNavigate} />
             <NavItem to="/soundcloud" label="SoundCloud" icon={<Cloud size={18} />} onClick={onNavigate} />
+            <NavItem to="/spotify" label="Spotify" icon={<Music2 size={18} />} onClick={onNavigate} />
           </>
         )}
 

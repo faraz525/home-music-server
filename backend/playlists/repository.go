@@ -441,7 +441,9 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 	query := `
 		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at,
+		       t.sample_rate, t.bitrate,
+		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+		       t.file_path, t.created_at, t.updated_at,
 		       pt.added_at
 		FROM tracks t
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -459,6 +461,9 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 	var tracks []*imodels.Track
 	for rows.Next() {
 		var track imodels.Track
+		var bpm, bpmConf, keyConf sql.NullFloat64
+		var musicalKey sql.NullString
+		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -473,6 +478,12 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 			&track.Year,
 			&track.SampleRate,
 			&track.Bitrate,
+			&bpm,
+			&bpmConf,
+			&musicalKey,
+			&keyConf,
+			&analyzedAt,
+			&track.AnalysisStatus,
 			&track.FilePath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
@@ -480,6 +491,22 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
+		}
+		if bpm.Valid {
+			track.BPM = &bpm.Float64
+		}
+		if bpmConf.Valid {
+			track.BPMConfidence = &bpmConf.Float64
+		}
+		if musicalKey.Valid {
+			v := musicalKey.String
+			track.MusicalKey = &v
+		}
+		if keyConf.Valid {
+			track.KeyConfidence = &keyConf.Float64
+		}
+		if analyzedAt.Valid {
+			track.AnalyzedAt = &analyzedAt.Time
 		}
 
 		tracks = append(tracks, &track)
@@ -511,7 +538,9 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	query := `
 		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		       t.sample_rate, t.bitrate,
+		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+		       t.file_path, t.created_at, t.updated_at
 		FROM tracks t
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE t.owner_user_id = ?
@@ -530,6 +559,9 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	var tracks []*imodels.Track
 	for rows.Next() {
 		var track imodels.Track
+		var bpm, bpmConf, keyConf sql.NullFloat64
+		var musicalKey sql.NullString
+		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -544,12 +576,34 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 			&track.Year,
 			&track.SampleRate,
 			&track.Bitrate,
+			&bpm,
+			&bpmConf,
+			&musicalKey,
+			&keyConf,
+			&analyzedAt,
+			&track.AnalysisStatus,
 			&track.FilePath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
+		}
+		if bpm.Valid {
+			track.BPM = &bpm.Float64
+		}
+		if bpmConf.Valid {
+			track.BPMConfidence = &bpmConf.Float64
+		}
+		if musicalKey.Valid {
+			v := musicalKey.String
+			track.MusicalKey = &v
+		}
+		if keyConf.Valid {
+			track.KeyConfidence = &keyConf.Float64
+		}
+		if analyzedAt.Valid {
+			track.AnalyzedAt = &analyzedAt.Time
 		}
 
 		tracks = append(tracks, &track)
@@ -594,7 +648,9 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 	searchQuery := `
 		SELECT DISTINCT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		       t.sample_rate, t.bitrate,
+		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+		       t.file_path, t.created_at, t.updated_at
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -614,6 +670,9 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 	var tracks []*imodels.Track
 	for rows.Next() {
 		var track imodels.Track
+		var bpm, bpmConf, keyConf sql.NullFloat64
+		var musicalKey sql.NullString
+		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -628,12 +687,34 @@ func (r *Repository) SearchTracksNotInPlaylist(userID, query string, limit, offs
 			&track.Year,
 			&track.SampleRate,
 			&track.Bitrate,
+			&bpm,
+			&bpmConf,
+			&musicalKey,
+			&keyConf,
+			&analyzedAt,
+			&track.AnalysisStatus,
 			&track.FilePath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
+		}
+		if bpm.Valid {
+			track.BPM = &bpm.Float64
+		}
+		if bpmConf.Valid {
+			track.BPMConfidence = &bpmConf.Float64
+		}
+		if musicalKey.Valid {
+			v := musicalKey.String
+			track.MusicalKey = &v
+		}
+		if keyConf.Valid {
+			track.KeyConfidence = &keyConf.Float64
+		}
+		if analyzedAt.Valid {
+			track.AnalyzedAt = &analyzedAt.Time
 		}
 
 		tracks = append(tracks, &track)
@@ -671,7 +752,9 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 	searchQuery := `
 		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
-		       t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+		       t.sample_rate, t.bitrate,
+		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+		       t.file_path, t.created_at, t.updated_at
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -690,6 +773,9 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 	var tracks []*imodels.Track
 	for rows.Next() {
 		var track imodels.Track
+		var bpm, bpmConf, keyConf sql.NullFloat64
+		var musicalKey sql.NullString
+		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
 			&track.OwnerUserID,
@@ -704,12 +790,34 @@ func (r *Repository) SearchPlaylistTracks(playlistID, query string, limit, offse
 			&track.Year,
 			&track.SampleRate,
 			&track.Bitrate,
+			&bpm,
+			&bpmConf,
+			&musicalKey,
+			&keyConf,
+			&analyzedAt,
+			&track.AnalysisStatus,
 			&track.FilePath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan track: %w", err)
+		}
+		if bpm.Valid {
+			track.BPM = &bpm.Float64
+		}
+		if bpmConf.Valid {
+			track.BPMConfidence = &bpmConf.Float64
+		}
+		if musicalKey.Valid {
+			v := musicalKey.String
+			track.MusicalKey = &v
+		}
+		if keyConf.Valid {
+			track.KeyConfidence = &keyConf.Float64
+		}
+		if analyzedAt.Valid {
+			track.AnalyzedAt = &analyzedAt.Time
 		}
 
 		tracks = append(tracks, &track)

@@ -380,3 +380,9 @@ func derefInt(p *int) int {
 	}
 	return *p
 }
+
+// UpdateAnalysisOverride applies a user override to BPM and/or musical key.
+// Caller has already validated ranges and authorized the request.
+func (m *Manager) UpdateAnalysisOverride(ctx context.Context, trackID string, bpm *float64, musicalKey *string) error {
+	return m.repo.UpdateAnalysisOverride(ctx, trackID, bpm, musicalKey)
+}

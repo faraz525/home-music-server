@@ -66,6 +66,12 @@ export type Track = {
   year?: number
   sample_rate?: number
   bitrate?: number
+  bpm?: number
+  bpm_confidence?: number
+  musical_key?: string
+  key_confidence?: number
+  analyzed_at?: string
+  analysis_status?: 'pending' | 'analyzed' | 'failed' | 'user_edited'
   file_path?: string
   created_at?: string
   updated_at?: string

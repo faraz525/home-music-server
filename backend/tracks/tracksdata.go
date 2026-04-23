@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/faraz525/home-music-server/backend/internal/db"
@@ -17,6 +18,74 @@ type Repository struct {
 // NewRepository creates a new tracks data
 func NewRepository(db *db.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// scanTrack scans a row into a Track, handling nullable columns.
+// Accepts either *sql.Row or *sql.Rows via the Scan method.
+func scanTrack(row interface{ Scan(dest ...any) error }) (*imodels.Track, error) {
+	var t imodels.Track
+	var duration, bpm, bpmConf, keyConf sql.NullFloat64
+	var title, artist, album, genre, key sql.NullString
+	var year, sampleRate, bitrate sql.NullInt64
+	var analyzedAt sql.NullTime
+
+	err := row.Scan(
+		&t.ID, &t.OwnerUserID, &t.OriginalFilename, &t.ContentType, &t.SizeBytes,
+		&duration, &title, &artist, &album, &genre, &year, &sampleRate, &bitrate,
+		&bpm, &bpmConf, &key, &keyConf, &analyzedAt, &t.AnalysisStatus,
+		&t.FilePath, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if duration.Valid {
+		t.DurationSeconds = &duration.Float64
+	}
+	if title.Valid {
+		v := title.String
+		t.Title = &v
+	}
+	if artist.Valid {
+		v := artist.String
+		t.Artist = &v
+	}
+	if album.Valid {
+		v := album.String
+		t.Album = &v
+	}
+	if genre.Valid {
+		v := genre.String
+		t.Genre = &v
+	}
+	if year.Valid {
+		v := int(year.Int64)
+		t.Year = &v
+	}
+	if sampleRate.Valid {
+		v := int(sampleRate.Int64)
+		t.SampleRate = &v
+	}
+	if bitrate.Valid {
+		v := int(bitrate.Int64)
+		t.Bitrate = &v
+	}
+	if bpm.Valid {
+		t.BPM = &bpm.Float64
+	}
+	if bpmConf.Valid {
+		t.BPMConfidence = &bpmConf.Float64
+	}
+	if key.Valid {
+		v := key.String
+		t.MusicalKey = &v
+	}
+	if keyConf.Valid {
+		t.KeyConfidence = &keyConf.Float64
+	}
+	if analyzedAt.Valid {
+		t.AnalyzedAt = &analyzedAt.Time
+	}
+	return &t, nil
 }
 
 // CreateTrack creates a new track in the database
@@ -42,7 +111,9 @@ func (r *Repository) CreateTrack(ctx context.Context, track *imodels.Track) (*im
 // GetTracks retrieves tracks for a user with pagination
 func (r *Repository) GetTracks(ctx context.Context, userID string, limit, offset int) ([]*imodels.Track, error) {
 	query := `SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
+		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate,
+		bpm, bpm_confidence, musical_key, key_confidence, analyzed_at, analysis_status,
+		file_path, created_at, updated_at
 		FROM tracks WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
 	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
@@ -53,16 +124,11 @@ func (r *Repository) GetTracks(ctx context.Context, userID string, limit, offset
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := scanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
@@ -77,8 +143,10 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 		// Use FTS5 for search
 		query = `
 			SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-				t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year, 
-				t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+				t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
+				t.sample_rate, t.bitrate,
+				t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+				t.file_path, t.created_at, t.updated_at
 			FROM tracks t
 			INNER JOIN tracks_fts fts ON t.id = fts.track_id
 			WHERE tracks_fts MATCH ?
@@ -91,10 +159,11 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 		// No search, just list all
 		query = `
 			SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-				duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, 
+				duration_seconds, title, artist, album, genre, year, sample_rate, bitrate,
+				bpm, bpm_confidence, musical_key, key_confidence, analyzed_at, analysis_status,
 				file_path, created_at, updated_at
-			FROM tracks 
-			ORDER BY created_at DESC 
+			FROM tracks
+			ORDER BY created_at DESC
 			LIMIT ? OFFSET ?
 		`
 		args = []interface{}{limit, offset}
@@ -108,16 +177,11 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := scanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
@@ -125,21 +189,15 @@ func (r *Repository) GetAllTracks(ctx context.Context, limit, offset int, search
 
 // GetTrackByID retrieves a single track by ID
 func (r *Repository) GetTrackByID(ctx context.Context, trackID string) (*imodels.Track, error) {
-	var track imodels.Track
-	err := r.db.QueryRowContext(ctx,
+	row := r.db.QueryRowContext(ctx,
 		`SELECT id, owner_user_id, original_filename, content_type, size_bytes,
-		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate, file_path, created_at, updated_at
+		duration_seconds, title, artist, album, genre, year, sample_rate, bitrate,
+		bpm, bpm_confidence, musical_key, key_confidence, analyzed_at, analysis_status,
+		file_path, created_at, updated_at
 		FROM tracks WHERE id = ?`,
 		trackID,
-	).Scan(
-		&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-		&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-		&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
 	)
-	if err != nil {
-		return nil, err
-	}
-	return &track, nil
+	return scanTrack(row)
 }
 
 // DeleteTrack deletes a track by ID
@@ -169,11 +227,13 @@ func (r *Repository) SearchTracks(ctx context.Context, query string, userID stri
 	// Use double quotes for phrase matching or just the term for any word matching
 	searchQuery := `
 		SELECT t.id, t.owner_user_id, t.original_filename, t.content_type, t.size_bytes,
-			t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year, 
-			t.sample_rate, t.bitrate, t.file_path, t.created_at, t.updated_at
+			t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
+			t.sample_rate, t.bitrate,
+			t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
+			t.file_path, t.created_at, t.updated_at
 		FROM tracks t
 		INNER JOIN tracks_fts fts ON t.id = fts.track_id
-		WHERE t.owner_user_id = ? 
+		WHERE t.owner_user_id = ?
 		AND tracks_fts MATCH ?
 		ORDER BY fts.rank, t.created_at DESC
 		LIMIT ? OFFSET ?
@@ -199,16 +259,11 @@ func (r *Repository) SearchTracks(ctx context.Context, query string, userID stri
 
 	var tracks []*imodels.Track
 	for rows.Next() {
-		var track imodels.Track
-		err := rows.Scan(
-			&track.ID, &track.OwnerUserID, &track.OriginalFilename, &track.ContentType, &track.SizeBytes,
-			&track.DurationSeconds, &track.Title, &track.Artist, &track.Album, &track.Genre, &track.Year,
-			&track.SampleRate, &track.Bitrate, &track.FilePath, &track.CreatedAt, &track.UpdatedAt,
-		)
+		track, err := scanTrack(rows)
 		if err != nil {
 			return nil, err
 		}
-		tracks = append(tracks, &track)
+		tracks = append(tracks, track)
 	}
 
 	return tracks, rows.Err()
@@ -256,4 +311,24 @@ func prepareFTS5Query(query string) string {
 	// "feel the vibration" becomes "feel* AND the* AND vibration*"
 	// "on & on" becomes "on* AND on*" (& is removed, both "on" terms must match)
 	return strings.Join(terms, " AND ")
+}
+
+// UpdateAnalysisOverride sets user-edited BPM and/or key and flips status to 'user_edited'.
+// nil values leave the corresponding column untouched.
+func (r *Repository) UpdateAnalysisOverride(ctx context.Context, trackID string, bpm *float64, musicalKey *string) error {
+	// Build a dynamic SET clause so we only update provided fields.
+	sets := []string{"analysis_status = 'user_edited'", "analysis_error = NULL", "next_retry_at = NULL", "updated_at = CURRENT_TIMESTAMP"}
+	args := []any{}
+	if bpm != nil {
+		sets = append(sets, "bpm = ?")
+		args = append(args, *bpm)
+	}
+	if musicalKey != nil {
+		sets = append(sets, "musical_key = ?")
+		args = append(args, *musicalKey)
+	}
+	args = append(args, trackID)
+	query := "UPDATE tracks SET " + strings.Join(sets, ", ") + " WHERE id = ?"
+	_, err := r.db.ExecContext(ctx, query, args...)
+	return err
 }

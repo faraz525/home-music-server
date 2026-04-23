@@ -5,12 +5,13 @@ import (
 )
 
 type Config struct {
-	Port          string
-	DataDir       string
-	JWTSecret     string
-	RefreshSecret string
-	BaseURL       string
-	Env           string
+	Port             string
+	DataDir          string
+	JWTSecret        string
+	RefreshSecret    string
+	BaseURL          string
+	Env              string
+	MonochromeAPIURL string
 }
 
 func FromEnv() *Config {
@@ -23,6 +24,7 @@ func FromEnv() *Config {
 	cfg.RefreshSecret = getEnv("REFRESH_SECRET", "")
 	cfg.BaseURL = getEnv("BASE_URL", "http://localhost")
 	cfg.Env = getEnv("APP_ENV", "development")
+	cfg.MonochromeAPIURL = getEnv("MONOCHROME_API_URL", "")
 	return cfg
 }
 

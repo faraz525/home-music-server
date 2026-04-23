@@ -35,6 +35,15 @@ CREATE TABLE IF NOT EXISTS tracks (
     year INTEGER,
     sample_rate INTEGER,
     bitrate INTEGER,
+    bpm REAL,
+    bpm_confidence REAL,
+    musical_key TEXT,
+    key_confidence REAL,
+    analyzed_at DATETIME,
+    analysis_status TEXT NOT NULL DEFAULT 'pending',
+    analysis_error TEXT,
+    analysis_retry_count INTEGER NOT NULL DEFAULT 0,
+    next_retry_at DATETIME,
     file_path TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -88,6 +97,8 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_tracks_owner_created ON tracks(owner_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tracks_created_at ON tracks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
+CREATE INDEX IF NOT EXISTS idx_tracks_analysis_status
+    ON tracks(analysis_status, next_retry_at);
 
 -- Playlist indexes
 CREATE INDEX IF NOT EXISTS idx_playlists_owner_default ON playlists(owner_user_id, is_default);

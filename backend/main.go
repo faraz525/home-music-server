@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/faraz525/home-music-server/backend/analysis"
 	"github.com/faraz525/home-music-server/backend/auth"
 	"github.com/faraz525/home-music-server/backend/internal/config"
 	idb "github.com/faraz525/home-music-server/backend/internal/db"
 	mlocal "github.com/faraz525/home-music-server/backend/internal/media/metadata/local"
 	slocal "github.com/faraz525/home-music-server/backend/internal/storage/local"
+	"github.com/faraz525/home-music-server/backend/monochrome"
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/server"
 	"github.com/faraz525/home-music-server/backend/soundcloud"
+	"github.com/faraz525/home-music-server/backend/spotify"
 	"github.com/faraz525/home-music-server/backend/tracks"
 )
 
@@ -67,6 +71,40 @@ func main() {
 	)
 	fmt.Printf("[CrateDrop] SoundCloud sync manager initialized\n")
 
+	// Initialize monochrome.tf client (optional — enables FLAC downloads via TIDAL)
+	var monoClient *monochrome.Client
+	if cfg.MonochromeAPIURL != "" {
+		hosts := strings.Split(cfg.MonochromeAPIURL, ",")
+		monoClient = monochrome.NewClient(hosts, 120*time.Second)
+		fmt.Printf("[CrateDrop] Monochrome client enabled (%d backend(s): %v)\n",
+			len(monoClient.Hosts()), monoClient.Hosts())
+	} else {
+		fmt.Printf("[CrateDrop] Monochrome client disabled (set MONOCHROME_API_URL to enable; comma-separated list supported)\n")
+	}
+
+	// Initialize Spotify sync manager
+	spotifyRepo := spotify.NewRepository(db)
+	spotifyManager := spotify.NewManager(
+		spotifyRepo,
+		tracksRepo,
+		storage,
+		extractor,
+		playlistsManager,
+		cfg.DataDir,
+		monoClient,
+	)
+	fmt.Printf("[CrateDrop] Spotify sync manager initialized\n")
+
+	// Initialize analysis (BPM + key detection)
+	analysisRepo := analysis.NewRepository(db.DB)
+	analyzer := analysis.NewAnalyzer(90 * time.Second)
+	analysisManager := analysis.NewManager(analysisRepo, analyzer)
+	if analysis.BinaryAvailable() {
+		fmt.Printf("[CrateDrop] Analysis worker enabled (essentia binary found)\n")
+	} else {
+		fmt.Printf("[CrateDrop] WARNING: streaming_extractor_music not on PATH — analysis disabled\n")
+	}
+
 	// Initialize router and API group
 	r, api := server.NewRouter()
 
@@ -77,10 +115,16 @@ func main() {
 	tracks.Routes(tracksManager, playlistsManager)(protected)
 	playlists.Routes(playlistsManager)(protected)
 	soundcloud.Routes(soundcloudManager)(protected)
+	spotify.Routes(spotifyManager)(protected)
 
-	// Start SoundCloud sync loop in background
+	// Start sync loops in background
 	ctx := context.Background()
 	go soundcloud.StartSyncLoop(ctx, soundcloudManager)
+	go spotify.StartSyncLoop(ctx, spotifyManager)
+
+	if analysis.BinaryAvailable() {
+		go analysis.StartLoop(ctx, analysisManager, 10*time.Second)
+	}
 
 	addr := "0.0.0.0:" + cfg.Port
 	fmt.Printf("[CrateDrop] Server listening on http://%s\n", addr)
