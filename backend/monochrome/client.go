@@ -60,12 +60,21 @@ type StreamInfo struct {
 	Codec    string
 }
 
-// SearchByISRC looks up the TIDAL catalog by ISRC and returns zero or more matches.
-func (c *Client) SearchByISRC(ctx context.Context, isrc string) ([]TrackMatch, error) {
-	if strings.TrimSpace(isrc) == "" {
-		return nil, fmt.Errorf("empty ISRC")
+// Search runs a free-text query against the TIDAL catalog and returns up to
+// `limit` matches. The upstream /search/ endpoint accepts only free-text via
+// `s=` — there is no ISRC query param, so ISRC filtering must be done by the
+// caller after reading TrackMatch.ISRC on each result.
+func (c *Client) Search(ctx context.Context, query string, limit int) ([]TrackMatch, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("empty query")
 	}
-	return c.doSearch(ctx, url.Values{"i": {isrc}, "limit": {"5"}})
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	return c.doSearch(ctx, url.Values{
+		"s":     {query},
+		"limit": {fmt.Sprintf("%d", limit)},
+	})
 }
 
 func (c *Client) doSearch(ctx context.Context, q url.Values) ([]TrackMatch, error) {

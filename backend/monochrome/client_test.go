@@ -20,20 +20,24 @@ func newTestClient(t *testing.T, handler http.Handler) (*Client, *httptest.Serve
 	return NewClient(srv.URL, 5*time.Second), srv
 }
 
-func TestSearchByISRC_ParsesCanonicalResponse(t *testing.T) {
+func TestSearch_ParsesCanonicalResponse(t *testing.T) {
+	// Shape modeled after a real response from api.monochrome.tf (fields
+	// abbreviated). Both "artist" (singular) and "artists" (plural) are
+	// returned upstream; we rely on the plural form.
 	const canonicalBody = `{
-		"version": "2.10",
+		"version": "2.5",
 		"data": {
-			"limit": 5,
+			"limit": 25,
 			"offset": 0,
 			"totalNumberOfItems": 1,
 			"items": [{
-				"id": 77640691,
+				"id": 36737274,
 				"title": "Bohemian Rhapsody",
 				"duration": 354,
-				"isrc": "GBUM71029600",
-				"audioQuality": "HI_RES_LOSSLESS",
-				"artists": [{"id": 1, "name": "Queen"}],
+				"isrc": "GBUM71029604",
+				"audioQuality": "LOSSLESS",
+				"artist": {"id": 8992, "name": "Queen"},
+				"artists": [{"id": 8992, "name": "Queen", "type": "MAIN"}],
 				"album": {"id": 2, "title": "A Night at the Opera"}
 			}]
 		}
@@ -48,24 +52,29 @@ func TestSearchByISRC_ParsesCanonicalResponse(t *testing.T) {
 	})
 	c, _ := newTestClient(t, handler)
 
-	matches, err := c.SearchByISRC(context.Background(), "GBUM71029600")
+	matches, err := c.Search(context.Background(), "Bohemian Rhapsody Queen", 25)
 	if err != nil {
-		t.Fatalf("SearchByISRC: %v", err)
+		t.Fatalf("Search: %v", err)
 	}
 	if gotPath != "/search/" {
 		t.Errorf("path: got %q, want /search/", gotPath)
 	}
-	if !strings.Contains(gotQuery, "i=GBUM71029600") {
-		t.Errorf("query must contain ISRC param: got %q", gotQuery)
+	// Free-text param is `s=`; the API rejects `i=` (ISRC) despite what the
+	// community docs suggest.
+	if !strings.Contains(gotQuery, "s=") {
+		t.Errorf("query must use s= param: got %q", gotQuery)
+	}
+	if strings.Contains(gotQuery, "i=") {
+		t.Errorf("query must NOT use i= param (rejected by upstream): got %q", gotQuery)
 	}
 	if len(matches) != 1 {
 		t.Fatalf("matches: got %d, want 1", len(matches))
 	}
 	m := matches[0]
-	if m.TidalID != 77640691 || m.ISRC != "GBUM71029600" || m.Title != "Bohemian Rhapsody" {
+	if m.TidalID != 36737274 || m.ISRC != "GBUM71029604" || m.Title != "Bohemian Rhapsody" {
 		t.Errorf("match fields wrong: %+v", m)
 	}
-	if m.DurationSec != 354 || m.Quality != "HI_RES_LOSSLESS" {
+	if m.DurationSec != 354 || m.Quality != "LOSSLESS" {
 		t.Errorf("match duration/quality wrong: %+v", m)
 	}
 	if len(m.Artists) != 1 || m.Artists[0] != "Queen" {
@@ -76,37 +85,56 @@ func TestSearchByISRC_ParsesCanonicalResponse(t *testing.T) {
 	}
 }
 
-func TestSearchByISRC_EmptyISRCRejected(t *testing.T) {
+func TestSearch_EmptyQueryRejected(t *testing.T) {
 	c := NewClient("http://example.invalid", time.Second)
-	if _, err := c.SearchByISRC(context.Background(), ""); err == nil {
-		t.Fatal("expected error for empty ISRC")
+	if _, err := c.Search(context.Background(), "", 10); err == nil {
+		t.Fatal("expected error for empty query")
 	}
-	if _, err := c.SearchByISRC(context.Background(), "   "); err == nil {
-		t.Fatal("expected error for whitespace-only ISRC")
+	if _, err := c.Search(context.Background(), "   ", 10); err == nil {
+		t.Fatal("expected error for whitespace-only query")
 	}
 }
 
-func TestSearchByISRC_NoMatches(t *testing.T) {
+func TestSearch_NoMatches(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"data":{"items":[]}}`)
 	})
 	c, _ := newTestClient(t, handler)
-	matches, err := c.SearchByISRC(context.Background(), "ZZZZ00000000")
+	matches, err := c.Search(context.Background(), "zzznonexistentxxx", 10)
 	if err != nil {
-		t.Fatalf("SearchByISRC: %v", err)
+		t.Fatalf("Search: %v", err)
 	}
 	if len(matches) != 0 {
 		t.Errorf("expected 0 matches, got %d", len(matches))
 	}
 }
 
-func TestSearchByISRC_HTTPError(t *testing.T) {
+func TestSearch_HTTPError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"detail":"Service Unavailable"}`, http.StatusServiceUnavailable)
 	})
 	c, _ := newTestClient(t, handler)
-	if _, err := c.SearchByISRC(context.Background(), "USRC11300135"); err == nil {
+	if _, err := c.Search(context.Background(), "anything", 10); err == nil {
 		t.Fatal("expected error on 503")
+	}
+}
+
+func TestSearch_UpstreamAPIErrorSurfaces(t *testing.T) {
+	// The real service frequently returns 200 with `{"detail":"Upstream API error"}`
+	// when TIDAL has banned the backend account. Our client treats this as a
+	// successful-but-empty search (no items), which lets the caller fall back
+	// gracefully. Callers that need to know this happened should check for
+	// zero results.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"detail":"Upstream API error"}`)
+	})
+	c, _ := newTestClient(t, handler)
+	matches, err := c.Search(context.Background(), "anything", 10)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("expected 0 matches when upstream reports error, got %d", len(matches))
 	}
 }
 

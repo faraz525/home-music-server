@@ -646,29 +646,36 @@ func getArtistName(st SpotifyTrack) string {
 }
 
 // tryMonochromeDownload attempts to resolve st to a TIDAL FLAC via monochrome
-// and saves it into tmpDir. Duration is used to guard against wrong-version
-// matches (clean edits, remasters) when multiple ISRC hits are returned.
+// and saves it into tmpDir.
+//
+// The upstream API has no direct ISRC lookup, so we run a free-text search for
+// "artist title" and require an exact ISRC match among the results. No ISRC
+// match → fall back to yt-dlp. Duration is a secondary sanity check against
+// mislabeled catalog entries.
 func (m *Manager) tryMonochromeDownload(ctx context.Context, tmpDir string, st SpotifyTrack) error {
-	matches, err := m.monochrome.SearchByISRC(ctx, st.ExternalIDs.ISRC)
+	query := strings.TrimSpace(fmt.Sprintf("%s %s", getArtistName(st), st.Name))
+	if query == "" {
+		return fmt.Errorf("empty search query")
+	}
+	matches, err := m.monochrome.Search(ctx, query, 50)
 	if err != nil {
 		return fmt.Errorf("search: %w", err)
 	}
-	if len(matches) == 0 {
-		return fmt.Errorf("no ISRC match")
+
+	var best *monochrome.TrackMatch
+	for i := range matches {
+		if strings.EqualFold(matches[i].ISRC, st.ExternalIDs.ISRC) {
+			best = &matches[i]
+			break
+		}
+	}
+	if best == nil {
+		return fmt.Errorf("no ISRC match for %s in %d results", st.ExternalIDs.ISRC, len(matches))
 	}
 
 	spotifyDurSec := st.DurationMs / 1000
-	best := matches[0]
-	bestDiff := absInt(best.DurationSec - spotifyDurSec)
-	for _, cand := range matches[1:] {
-		d := absInt(cand.DurationSec - spotifyDurSec)
-		if d < bestDiff {
-			best = cand
-			bestDiff = d
-		}
-	}
-	if spotifyDurSec > 0 && bestDiff > 5 {
-		return fmt.Errorf("duration mismatch: tidal=%ds spotify=%ds", best.DurationSec, spotifyDurSec)
+	if spotifyDurSec > 0 && absInt(best.DurationSec-spotifyDurSec) > 5 {
+		return fmt.Errorf("ISRC match but duration mismatch: tidal=%ds spotify=%ds", best.DurationSec, spotifyDurSec)
 	}
 
 	info, err := m.monochrome.GetStreamInfo(ctx, best.TidalID, monochrome.QualityHiRes)
