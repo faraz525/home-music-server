@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, cratesApi, normalizeCrateList, tracksApi } from '../lib/api'
 import type { CrateList, TrackList } from '../types/crates'
 
@@ -12,6 +12,9 @@ export const queryKeys = {
 const emptyCrateList: CrateList = { crates: [], total: 0, limit: 20, offset: 0, has_next: false }
 const emptyTrackList: TrackList = { tracks: [], total: 0, limit: 20, offset: 0, has_next: false }
 
+// Backend caps per-request track lists at 100; we page through via offset.
+const TRACKS_PAGE_SIZE = 100
+
 // Crates query hook
 export function useCrates() {
   return useQuery({
@@ -24,33 +27,51 @@ export function useCrates() {
   })
 }
 
-// Tracks query hook
+// Tracks query hook — paginates via useInfiniteQuery, exposes a flattened
+// TrackList via `data` so consumers keep their existing shape.
 export function useTracks(params: { q?: string; selectedCrate?: string }) {
   const { q, selectedCrate } = params
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.tracks(params),
-    queryFn: async () => {
-      let data
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const offset = pageParam as number
+      const pageParams = { q: q || undefined, limit: TRACKS_PAGE_SIZE, offset }
+
+      let response
       if (selectedCrate === 'unsorted') {
-        const response = await tracksApi.getUnsorted({ q: q || undefined })
-        data = response.data
+        response = await tracksApi.getUnsorted(pageParams)
       } else if (selectedCrate && selectedCrate !== 'all') {
-        const response = await api.get('/api/tracks', {
-          params: { q: q || undefined, playlist_id: selectedCrate }
+        response = await api.get('/api/tracks', {
+          params: { ...pageParams, playlist_id: selectedCrate },
         })
-        data = response.data
       } else {
-        const response = await api.get('/api/tracks', { params: { q: q || undefined } })
-        data = response.data
+        response = await api.get('/api/tracks', { params: pageParams })
       }
 
-      if (data && data.tracks && Array.isArray(data.tracks)) {
+      const data = response.data
+      if (data && Array.isArray(data.tracks)) {
         return data as TrackList
       }
       return emptyTrackList
     },
-    placeholderData: emptyTrackList,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.has_next) return undefined
+      return lastPage.offset + lastPage.tracks.length
+    },
+    select: (data) => {
+      const pages = data.pages as TrackList[]
+      const tracks = pages.flatMap((p) => p.tracks)
+      const last = pages[pages.length - 1]
+      return {
+        tracks,
+        total: last?.total ?? tracks.length,
+        limit: last?.limit ?? TRACKS_PAGE_SIZE,
+        offset: 0,
+        has_next: Boolean(last?.has_next),
+      } as TrackList
+    },
   })
 }
 
