@@ -28,8 +28,8 @@ except ImportError:
     ssl_context.verify_mode = ssl.CERT_NONE
 
 
-def get_soundcloud_likes(oauth_token: str, limit: int = 200) -> list:
-    """Fetch liked tracks using SoundCloud API"""
+def get_soundcloud_likes(oauth_token: str, page_size: int = 200, max_pages: int = 50) -> list:
+    """Fetch liked tracks using SoundCloud API, following next_href for pagination."""
 
     # First get user info to get user_id
     me_url = f"https://api-v2.soundcloud.com/me?oauth_token={oauth_token}"
@@ -51,16 +51,25 @@ def get_soundcloud_likes(oauth_token: str, limit: int = 200) -> list:
         print(f"Failed to get user info: {e}", file=sys.stderr)
         return []
 
-    # Fetch likes
-    likes_url = f"https://api-v2.soundcloud.com/users/{user_id}/track_likes?limit={limit}&oauth_token={oauth_token}"
+    tracks = []
+    next_url = (
+        f"https://api-v2.soundcloud.com/users/{user_id}/track_likes"
+        f"?limit={page_size}&oauth_token={oauth_token}"
+    )
 
-    try:
-        req = urllib.request.Request(likes_url)
-        req.add_header('User-Agent', 'Mozilla/5.0')
-        with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
-            likes_data = json.loads(response.read().decode())
+    for page in range(max_pages):
+        try:
+            req = urllib.request.Request(next_url)
+            req.add_header('User-Agent', 'Mozilla/5.0')
+            with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+                likes_data = json.loads(response.read().decode())
+        except urllib.error.HTTPError as e:
+            print(f"Failed to fetch likes (page {page + 1}): HTTP {e.code}", file=sys.stderr)
+            break
+        except Exception as e:
+            print(f"Failed to fetch likes (page {page + 1}): {e}", file=sys.stderr)
+            break
 
-        tracks = []
         for item in likes_data.get('collection', []):
             track = item.get('track')
             if track:
@@ -68,19 +77,22 @@ def get_soundcloud_likes(oauth_token: str, limit: int = 200) -> list:
                     'id': track.get('id'),
                     'title': track.get('title', 'Unknown'),
                     'artist': track.get('user', {}).get('username', 'Unknown'),
-                    'duration': track.get('duration', 0) // 1000,  # Convert ms to seconds
+                    'duration': track.get('duration', 0) // 1000,  # ms to seconds
                     'permalink_url': track.get('permalink_url'),
                 })
 
-        print(f"Found {len(tracks)} liked tracks")
-        return tracks
+        next_href = likes_data.get('next_href')
+        if not next_href:
+            break
 
-    except urllib.error.HTTPError as e:
-        print(f"Failed to fetch likes: HTTP {e.code}", file=sys.stderr)
-        return []
-    except Exception as e:
-        print(f"Failed to fetch likes: {e}", file=sys.stderr)
-        return []
+        # next_href drops oauth_token; re-append it.
+        sep = '&' if '?' in next_href else '?'
+        next_url = f"{next_href}{sep}oauth_token={oauth_token}"
+    else:
+        print(f"Hit max_pages={max_pages} cap; older likes may be missing.", file=sys.stderr)
+
+    print(f"Found {len(tracks)} liked tracks")
+    return tracks
 
 
 def download_tracks(tracks: list, output_dir: str, max_tracks: int = 50) -> list:
