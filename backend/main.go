@@ -13,6 +13,7 @@ import (
 	idb "github.com/faraz525/home-music-server/backend/internal/db"
 	mlocal "github.com/faraz525/home-music-server/backend/internal/media/metadata/local"
 	slocal "github.com/faraz525/home-music-server/backend/internal/storage/local"
+	"github.com/faraz525/home-music-server/backend/monochrome"
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/server"
 	"github.com/faraz525/home-music-server/backend/soundcloud"
@@ -69,6 +70,15 @@ func main() {
 	)
 	fmt.Printf("[CrateDrop] SoundCloud sync manager initialized\n")
 
+	// Initialize monochrome.tf client (optional — enables FLAC downloads via TIDAL)
+	var monoClient *monochrome.Client
+	if cfg.MonochromeAPIURL != "" {
+		monoClient = monochrome.NewClient(cfg.MonochromeAPIURL, 120*time.Second)
+		fmt.Printf("[CrateDrop] Monochrome client enabled (base: %s)\n", cfg.MonochromeAPIURL)
+	} else {
+		fmt.Printf("[CrateDrop] Monochrome client disabled (set MONOCHROME_API_URL to enable)\n")
+	}
+
 	// Initialize Spotify sync manager
 	spotifyRepo := spotify.NewRepository(db)
 	spotifyManager := spotify.NewManager(
@@ -78,6 +88,7 @@ func main() {
 		extractor,
 		playlistsManager,
 		cfg.DataDir,
+		monoClient,
 	)
 	fmt.Printf("[CrateDrop] Spotify sync manager initialized\n")
 

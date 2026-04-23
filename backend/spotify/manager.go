@@ -17,6 +17,7 @@ import (
 	"github.com/faraz525/home-music-server/backend/internal/media/metadata"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
 	"github.com/faraz525/home-music-server/backend/internal/storage"
+	"github.com/faraz525/home-music-server/backend/monochrome"
 	"github.com/faraz525/home-music-server/backend/playlists"
 	"github.com/faraz525/home-music-server/backend/tracks"
 	"github.com/faraz525/home-music-server/backend/utils"
@@ -36,9 +37,12 @@ type Manager struct {
 	playlistsManager *playlists.Manager
 	dataDir          string
 	clientID         string
+	monochrome       *monochrome.Client // optional; nil = disabled, falls straight to yt-dlp
 	syncMutex        sync.Mutex
 }
 
+// NewManager builds a Spotify sync manager. monoClient may be nil — when set,
+// downloads try monochrome.tf (TIDAL FLAC) first and fall back to yt-dlp.
 func NewManager(
 	repo *Repository,
 	tracksRepo *tracks.Repository,
@@ -46,6 +50,7 @@ func NewManager(
 	extractor metadata.Extractor,
 	pm *playlists.Manager,
 	dataDir string,
+	monoClient *monochrome.Client,
 ) *Manager {
 	clientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	return &Manager{
@@ -56,6 +61,7 @@ func NewManager(
 		playlistsManager: pm,
 		dataDir:          dataDir,
 		clientID:         clientID,
+		monochrome:       monoClient,
 	}
 }
 
@@ -231,10 +237,13 @@ type SpotifyTrack struct {
 	Album struct {
 		Name string `json:"name"`
 	} `json:"album"`
-	DurationMs int `json:"duration_ms"`
+	DurationMs   int `json:"duration_ms"`
 	ExternalURLs struct {
 		Spotify string `json:"spotify"`
 	} `json:"external_urls"`
+	ExternalIDs struct {
+		ISRC string `json:"isrc"`
+	} `json:"external_ids"`
 }
 
 // SpotifyPlaylist represents a playlist from Spotify API
@@ -518,22 +527,32 @@ func (m *Manager) downloadAndImportTrack(ctx context.Context, userID string, st 
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Use yt-dlp to download from Spotify (requires spotify-dl or similar setup)
-	// Fall back to searching YouTube for the track
-	searchQuery := fmt.Sprintf("%s %s", getArtistName(st), st.Name)
-	outputTemplate := filepath.Join(tmpDir, "%(title)s.%(ext)s")
+	// Prefer monochrome (TIDAL FLAC) when configured and ISRC is known.
+	// Any failure falls through to yt-dlp.
+	if m.monochrome != nil && st.ExternalIDs.ISRC != "" {
+		if err := m.tryMonochromeDownload(ctx, tmpDir, st); err != nil {
+			fmt.Printf("[Spotify] monochrome download failed for %s (ISRC %s): %v — falling back to yt-dlp\n",
+				st.Name, st.ExternalIDs.ISRC, err)
+		}
+	}
 
-	cmd := exec.CommandContext(ctx, "yt-dlp",
-		"--default-search", "ytsearch1",
-		"-x", "--audio-format", "mp3",
-		"--audio-quality", "0",
-		"-o", outputTemplate,
-		searchQuery,
-	)
+	// yt-dlp fallback only runs if monochrome produced no file.
+	if existing, _ := os.ReadDir(tmpDir); len(existing) == 0 {
+		searchQuery := fmt.Sprintf("%s %s", getArtistName(st), st.Name)
+		outputTemplate := filepath.Join(tmpDir, "%(title)s.%(ext)s")
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("download failed: %v, output: %s", err, string(output))
+		cmd := exec.CommandContext(ctx, "yt-dlp",
+			"--default-search", "ytsearch1",
+			"-x", "--audio-format", "mp3",
+			"--audio-quality", "0",
+			"-o", outputTemplate,
+			searchQuery,
+		)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("download failed: %v, output: %s", err, string(output))
+		}
 	}
 
 	files, err := os.ReadDir(tmpDir)
@@ -624,6 +643,78 @@ func getArtistName(st SpotifyTrack) string {
 		return strings.Join(names, ", ")
 	}
 	return ""
+}
+
+// tryMonochromeDownload attempts to resolve st to a TIDAL FLAC via monochrome
+// and saves it into tmpDir. Duration is used to guard against wrong-version
+// matches (clean edits, remasters) when multiple ISRC hits are returned.
+func (m *Manager) tryMonochromeDownload(ctx context.Context, tmpDir string, st SpotifyTrack) error {
+	matches, err := m.monochrome.SearchByISRC(ctx, st.ExternalIDs.ISRC)
+	if err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+	if len(matches) == 0 {
+		return fmt.Errorf("no ISRC match")
+	}
+
+	spotifyDurSec := st.DurationMs / 1000
+	best := matches[0]
+	bestDiff := absInt(best.DurationSec - spotifyDurSec)
+	for _, cand := range matches[1:] {
+		d := absInt(cand.DurationSec - spotifyDurSec)
+		if d < bestDiff {
+			best = cand
+			bestDiff = d
+		}
+	}
+	if spotifyDurSec > 0 && bestDiff > 5 {
+		return fmt.Errorf("duration mismatch: tidal=%ds spotify=%ds", best.DurationSec, spotifyDurSec)
+	}
+
+	info, err := m.monochrome.GetStreamInfo(ctx, best.TidalID, monochrome.QualityHiRes)
+	if err != nil {
+		return fmt.Errorf("stream info: %w", err)
+	}
+
+	safeName := sanitizeFilename(st.Name)
+	if safeName == "" {
+		safeName = fmt.Sprintf("track_%d", best.TidalID)
+	}
+	destPath := filepath.Join(tmpDir, safeName+".flac")
+	if err := m.monochrome.Download(ctx, info.URL, destPath); err != nil {
+		return fmt.Errorf("download: %w", err)
+	}
+
+	fmt.Printf("[Spotify] monochrome: %s — tidal=%d quality=%s\n", st.Name, best.TidalID, info.Quality)
+	return nil
+}
+
+// sanitizeFilename strips filesystem-reserved chars and control bytes; caps at 100 runes.
+func sanitizeFilename(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|':
+			b.WriteByte('_')
+		case r < 0x20:
+			// skip control chars
+		default:
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if len(out) > 100 {
+		out = out[:100]
+	}
+	return out
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // GetSyncedPlaylists returns all synced Spotify playlists
