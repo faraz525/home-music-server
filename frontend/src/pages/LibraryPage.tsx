@@ -6,6 +6,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { MoreHorizontal, ListPlus, Play, Pause, Music, Download, Disc, Search, X } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useCrates, useTracks, useDeleteTrack, useAddTracksToCrate, useRemoveTracksFromCrate, useUpdateTrackAnalysis } from '../hooks/useQueries'
+import { TrackCover } from '../components/TrackCover'
 
 function MiniVinyl({ spinning = false }: { spinning?: boolean }) {
   return (
@@ -530,12 +531,21 @@ export function LibraryPage() {
                       })()
                       const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
                       const displayArtist = t.artist || 'Unknown artist'
-                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
+                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds, coverPath: t.cover_path }, true)
                     }
                   }}
                 >
                   {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
                 </button>
+                {t.cover_path && (
+                  <TrackCover
+                    trackId={t.id}
+                    hasCover={true}
+                    size={28}
+                    fallback={null}
+                    alt={t.title}
+                  />
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     {isCurrent && <MiniVinyl spinning={isPlaying} />}
@@ -574,12 +584,21 @@ export function LibraryPage() {
                       })()
                       const displayTitle = t.title || fallbackFromFilename || 'Unknown track'
                       const displayArtist = t.artist || 'Unknown artist'
-                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds }, true)
+                      play({ id: t.id, title: displayTitle, artist: displayArtist, streamUrl: `/api/tracks/${t.id}/stream`, durationSeconds: t.duration_seconds, coverPath: t.cover_path }, true)
                     }
                   }}
                 >
                   {isCurrentAndPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
                 </button>
+                {t.cover_path && (
+                  <TrackCover
+                    trackId={t.id}
+                    hasCover={true}
+                    size={32}
+                    fallback={null}
+                    alt={t.title}
+                  />
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     {isCurrent && <MiniVinyl spinning={isPlaying} />}

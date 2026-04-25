@@ -162,5 +162,22 @@ func (d *DB) migrate() error {
 		}
 	}
 
+	// Check if cover_path column exists on tracks table
+	var coverColCount int
+	_ = d.QueryRow(`
+		SELECT COUNT(*)
+		FROM pragma_table_info('tracks')
+		WHERE name='cover_path'
+	`).Scan(&coverColCount)
+	if coverColCount == 0 {
+		migrationSQL, err := migrationsFS.ReadFile("migrations/006_add_track_cover.sql")
+		if err != nil {
+			return fmt.Errorf("failed to read migration 006_add_track_cover: %w", err)
+		}
+		if _, err := d.Exec(string(migrationSQL)); err != nil {
+			return fmt.Errorf("failed to execute migration 006_add_track_cover: %w", err)
+		}
+	}
+
 	return nil
 }

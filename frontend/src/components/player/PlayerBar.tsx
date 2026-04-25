@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { usePlayer } from '../../state/player'
+import { TrackCover } from '../TrackCover'
 
 function VinylRecord({ isPlaying, size = 48 }: { isPlaying: boolean; size?: number }) {
   return (
@@ -278,7 +279,17 @@ export function PlayerBar() {
         <div className="sm:hidden space-y-3">
           {/* Track info with vinyl */}
           <div className="flex items-center gap-3">
-            <VinylRecord isPlaying={isPlaying} size={40} />
+            {current ? (
+              <TrackCover
+                trackId={current.id}
+                hasCover={!!current.coverPath}
+                size={40}
+                fallback={<VinylRecord isPlaying={isPlaying} size={40} />}
+                alt={current.title}
+              />
+            ) : (
+              <VinylRecord isPlaying={isPlaying} size={40} />
+            )}
             <div className="flex-1 min-w-0">
               <div className="truncate text-sm font-medium text-crate-cream">
                 {current?.title || 'No track selected'}
@@ -364,7 +375,17 @@ export function PlayerBar() {
 
           {/* Center: Vinyl + Track info + Progress */}
           <div className="flex items-center gap-4 flex-1 min-w-0">
-            <VinylRecord isPlaying={isPlaying} size={48} />
+            {current ? (
+              <TrackCover
+                trackId={current.id}
+                hasCover={!!current.coverPath}
+                size={48}
+                fallback={<VinylRecord isPlaying={isPlaying} size={48} />}
+                alt={current.title}
+              />
+            ) : (
+              <VinylRecord isPlaying={isPlaying} size={48} />
+            )}
 
             <div className="min-w-0 w-48">
               <div className="truncate text-sm font-medium text-crate-cream">

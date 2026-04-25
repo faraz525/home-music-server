@@ -248,6 +248,14 @@ func (m *Manager) getValidToken(ctx context.Context) (string, error) {
 	return *cfg.AccessToken, nil
 }
 
+// SpotifyImage represents an image returned by the Spotify API.
+// Spotify orders Images largest-first; height/width may be null in some responses.
+type SpotifyImage struct {
+	URL    string `json:"url"`
+	Height int    `json:"height"`
+	Width  int    `json:"width"`
+}
+
 // SpotifyTrack represents a track from Spotify API
 type SpotifyTrack struct {
 	ID      string `json:"id"`
@@ -256,7 +264,8 @@ type SpotifyTrack struct {
 		Name string `json:"name"`
 	} `json:"artists"`
 	Album struct {
-		Name string `json:"name"`
+		Name   string         `json:"name"`
+		Images []SpotifyImage `json:"images"`
 	} `json:"album"`
 	DurationMs   int `json:"duration_ms"`
 	ExternalURLs struct {
@@ -652,7 +661,47 @@ func (m *Manager) downloadAndImportTrack(ctx context.Context, userID string, st 
 		return "", fmt.Errorf("failed to create track record: %w", err)
 	}
 
+	if err := m.attachCover(ctx, track, st); err != nil {
+		fmt.Printf("[Spotify] Warning: failed to attach cover for %s: %v\n", st.Name, err)
+	}
+
 	return track.ID, nil
+}
+
+// attachCover downloads the largest album image returned by Spotify and writes it
+// as a sidecar next to the track. Best-effort — failures are logged by the caller.
+func (m *Manager) attachCover(ctx context.Context, track *imodels.Track, st SpotifyTrack) error {
+	if len(st.Album.Images) == 0 {
+		return nil
+	}
+	imgURL := st.Album.Images[0].URL
+	if imgURL == "" {
+		return nil
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, "GET", imgURL, nil)
+	if err != nil {
+		return fmt.Errorf("build cover request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetch cover: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("cover fetch returned %d", resp.StatusCode)
+	}
+
+	coverRel, err := tracks.SaveCoverSidecar(ctx, m.storage, track.FilePath, resp.Header.Get("Content-Type"), imgURL, resp.Body)
+	if err != nil {
+		return err
+	}
+	if err := m.tracksRepo.UpdateCoverPath(ctx, track.ID, coverRel); err != nil {
+		return fmt.Errorf("update cover path: %w", err)
+	}
+	return nil
 }
 
 func getArtistName(st SpotifyTrack) string {

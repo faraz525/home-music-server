@@ -73,12 +73,18 @@ def get_soundcloud_likes(oauth_token: str, page_size: int = 200, max_pages: int 
         for item in likes_data.get('collection', []):
             track = item.get('track')
             if track:
+                # SoundCloud returns artwork at e.g. "-large.jpg" (~100x100); upgrade to
+                # "-t500x500" (500x500) when present so we get a usable thumbnail.
+                artwork_url = track.get('artwork_url')
+                if artwork_url and '-large.' in artwork_url:
+                    artwork_url = artwork_url.replace('-large.', '-t500x500.')
                 tracks.append({
                     'id': track.get('id'),
                     'title': track.get('title', 'Unknown'),
                     'artist': track.get('user', {}).get('username', 'Unknown'),
                     'duration': track.get('duration', 0) // 1000,  # ms to seconds
                     'permalink_url': track.get('permalink_url'),
+                    'artwork_url': artwork_url,
                 })
 
         next_href = likes_data.get('next_href')
@@ -93,6 +99,35 @@ def get_soundcloud_likes(oauth_token: str, page_size: int = 200, max_pages: int 
 
     print(f"Found {len(tracks)} liked tracks")
     return tracks
+
+
+def _download_cover(artwork_url, output_dir: str, track_id) -> str:
+    """Download cover art for a track. Returns absolute file path on success, '' on failure."""
+    if not artwork_url:
+        return ''
+    try:
+        ext = '.jpg'
+        lower = artwork_url.lower().split('?', 1)[0]
+        if lower.endswith('.png'):
+            ext = '.png'
+        elif lower.endswith('.webp'):
+            ext = '.webp'
+        elif lower.endswith('.jpeg') or lower.endswith('.jpg'):
+            ext = '.jpg'
+
+        cover_path = os.path.join(output_dir, f'{track_id}_cover{ext}')
+        req = urllib.request.Request(artwork_url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        with urllib.request.urlopen(req, timeout=15, context=ssl_context) as response:
+            data = response.read()
+        if not data:
+            return ''
+        with open(cover_path, 'wb') as f:
+            f.write(data)
+        return cover_path
+    except Exception as e:
+        print(f"  ! Cover download failed for {track_id}: {e}", file=sys.stderr)
+        return ''
 
 
 def download_tracks(tracks: list, output_dir: str, max_tracks: int = 50) -> list:
@@ -140,14 +175,18 @@ def download_tracks(tracks: list, output_dir: str, max_tracks: int = 50) -> list
             # Check if file was downloaded
             expected_file = os.path.join(output_dir, f'{track_id}.mp3')
             if os.path.exists(expected_file):
-                manifest.append({
+                cover_path = _download_cover(track.get('artwork_url'), output_dir, track_id)
+                entry = {
                     'file_path': expected_file,
                     'title': title,
                     'artist': artist,
                     'duration': track.get('duration', 0),
                     'soundcloud_id': str(track_id)
-                })
-                print(f"  ✓ Downloaded successfully")
+                }
+                if cover_path:
+                    entry['cover_path'] = cover_path
+                manifest.append(entry)
+                print(f"  ✓ Downloaded successfully" + (" (with cover)" if cover_path else ""))
             else:
                 print(f"  ✗ File not found after download")
 
