@@ -53,6 +53,7 @@ type ManifestEntry struct {
 	Artist       string `json:"artist"`
 	Duration     int    `json:"duration"`
 	SoundCloudID string `json:"soundcloud_id"`
+	CoverPath    string `json:"cover_path,omitempty"`
 }
 
 func (m *Manager) GetSyncConfig(ctx context.Context) (*SyncConfig, error) {
@@ -301,7 +302,33 @@ func (m *Manager) importTrack(ctx context.Context, userID string, entry Manifest
 		return "", fmt.Errorf("failed to create track record: %w", err)
 	}
 
+	if entry.CoverPath != "" {
+		if err := m.attachCover(ctx, track, entry.CoverPath); err != nil {
+			fmt.Printf("[SoundCloud] Warning: failed to attach cover for %s: %v\n", entry.Title, err)
+		}
+	}
+
 	return track.ID, nil
+}
+
+// attachCover copies a downloaded cover sidecar into the track's storage directory
+// and updates the track's cover_path. Best-effort — errors are returned but logged
+// by the caller; track import is not aborted on cover failure.
+func (m *Manager) attachCover(ctx context.Context, track *imodels.Track, srcPath string) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open cover: %w", err)
+	}
+	defer src.Close()
+
+	coverRel, err := tracks.SaveCoverSidecar(ctx, m.storage, track.FilePath, "", srcPath, src)
+	if err != nil {
+		return err
+	}
+	if err := m.tracksRepo.UpdateCoverPath(ctx, track.ID, coverRel); err != nil {
+		return fmt.Errorf("update cover path: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) TestDownload(ctx context.Context, url string) (string, error) {

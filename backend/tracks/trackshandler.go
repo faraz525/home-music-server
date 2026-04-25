@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -258,6 +260,49 @@ func StreamHandler(manager *Manager) gin.HandlerFunc {
 
 		io.CopyN(c.Writer, file, chunkSize)
 		fmt.Printf("[StreamProfiler] Total request time: %v\n", time.Since(startTime))
+	}
+}
+
+// CoverHandler serves the cover-art sidecar image for a track.
+// Mirrors the auth pattern in StreamHandler. Returns 404 when the track has no cover.
+func CoverHandler(manager *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		trackID := c.Param("id")
+		userID, _ := c.Get("user_id")
+		userRole, _ := c.Get("user_role")
+
+		track, err := manager.GetStreamInfo(c.Request.Context(), trackID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "track_not_found", "message": "Track not found"}})
+			return
+		}
+
+		if userRole != "admin" && track.OwnerUserID != userID.(string) {
+			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "access_denied", "message": "Access denied"}})
+			return
+		}
+
+		if track.CoverPath == nil || *track.CoverPath == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "cover_not_found", "message": "No cover art for this track"}})
+			return
+		}
+
+		file, info, err := manager.OpenFile(c.Request.Context(), *track.CoverPath)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"code": "cover_not_found", "message": "Cover file missing"}})
+			return
+		}
+		defer file.Close()
+
+		ctype := mime.TypeByExtension(filepath.Ext(*track.CoverPath))
+		if ctype == "" {
+			ctype = "image/jpeg"
+		}
+		c.Header("Content-Type", ctype)
+		c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
+		c.Header("Cache-Control", "private, max-age=86400, immutable")
+		c.Status(http.StatusOK)
+		io.Copy(c.Writer, file)
 	}
 }
 

@@ -72,7 +72,8 @@ export function CommunityPage() {
                 title: track.title || track.original_filename,
                 artist: track.artist || 'Unknown Artist',
                 streamUrl: `/api/tracks/${track.id}/stream`,
-                durationSeconds: track.duration_seconds
+                durationSeconds: track.duration_seconds,
+                coverPath: track.cover_path
             }, true)
         }
     }

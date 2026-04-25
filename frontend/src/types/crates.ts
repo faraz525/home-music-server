@@ -73,6 +73,7 @@ export type Track = {
   analyzed_at?: string
   analysis_status?: 'pending' | 'analyzed' | 'failed' | 'user_edited'
   file_path?: string
+  cover_path?: string
   created_at?: string
   updated_at?: string
 }

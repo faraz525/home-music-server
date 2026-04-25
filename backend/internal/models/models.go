@@ -33,6 +33,7 @@ type Track struct {
 	AnalyzedAt       *time.Time `json:"analyzed_at,omitempty"`
 	AnalysisStatus   string     `json:"analysis_status"`
 	FilePath         string     `json:"file_path"`
+	CoverPath        *string    `json:"cover_path,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }

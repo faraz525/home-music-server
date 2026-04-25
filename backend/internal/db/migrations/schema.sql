@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     analysis_retry_count INTEGER NOT NULL DEFAULT 0,
     next_retry_at DATETIME,
     file_path TEXT NOT NULL,
+    cover_path TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE

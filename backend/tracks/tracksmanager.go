@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/faraz525/home-music-server/backend/internal/media/metadata"
 	imodels "github.com/faraz525/home-music-server/backend/internal/models"
@@ -67,6 +69,17 @@ func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *mu
 		md = &metadata.AudioMetadata{}
 	}
 
+	// Pull embedded album art out into a sidecar BEFORE the sanitizer strips it
+	// from the audio file. This preserves the art for display while keeping the
+	// audio file small for fast streaming start-up.
+	coverTmp, coverErr := extractEmbeddedCover(ctx, fullPath)
+	if coverErr != nil {
+		fmt.Printf("[CrateDrop] No embedded cover for %s (or extract failed): %v\n", trackID, coverErr)
+	}
+	if coverTmp != "" {
+		defer os.Remove(coverTmp)
+	}
+
 	// Sanitize over-sized metadata blobs (e.g. embedded album art) that delay playback
 	if updatedSize, err := m.sanitizeIfNeeded(ctx, contentType, fullPath); err != nil {
 		fmt.Printf("[CrateDrop] Warning: failed to sanitize track %s: %v\n", trackID, err)
@@ -113,7 +126,63 @@ func (m *Manager) UploadTrack(ctx context.Context, userID string, fileHeader *mu
 	}
 	fmt.Printf("[CrateDrop] Track successfully saved with ID: %s\n", track.ID)
 
+	// Attach the cover we extracted before sanitize, if any.
+	if coverTmp != "" {
+		if err := m.attachExtractedCover(ctx, track, coverTmp); err != nil {
+			fmt.Printf("[CrateDrop] Warning: failed to attach extracted cover for %s: %v\n", track.ID, err)
+		}
+	}
+
 	return track, nil
+}
+
+// attachExtractedCover moves a tmp cover file into the track's storage directory
+// and updates cover_path. Best-effort.
+func (m *Manager) attachExtractedCover(ctx context.Context, track *imodels.Track, tmpPath string) error {
+	src, err := os.Open(tmpPath)
+	if err != nil {
+		return fmt.Errorf("open tmp cover: %w", err)
+	}
+	defer src.Close()
+	coverRel, err := SaveCoverSidecar(ctx, m.storage, track.FilePath, "image/jpeg", tmpPath, src)
+	if err != nil {
+		return err
+	}
+	if err := m.repo.UpdateCoverPath(ctx, track.ID, coverRel); err != nil {
+		return fmt.Errorf("update cover path: %w", err)
+	}
+	return nil
+}
+
+// extractEmbeddedCover runs ffmpeg to pull the attached picture out of an audio file
+// into a JPEG tmp file. Returns the tmp path on success, or an error when no picture
+// is embedded / ffmpeg fails. The caller owns the returned tmp file.
+func extractEmbeddedCover(ctx context.Context, audioPath string) (string, error) {
+	tmpFile, err := os.CreateTemp("", "cratedrop-cover-*.jpg")
+	if err != nil {
+		return "", fmt.Errorf("create cover tmp: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	// ffmpeg won't overwrite a file unless we pass -y; we just truncated it above
+	// so it's empty. -an drops audio, default mapping selects the embedded picture.
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-y",
+		"-i", audioPath,
+		"-an",
+		"-frames:v", "1",
+		tmpPath,
+	)
+	output, runErr := cmd.CombinedOutput()
+	info, statErr := os.Stat(tmpPath)
+	if runErr != nil || statErr != nil || info == nil || info.Size() == 0 {
+		os.Remove(tmpPath)
+		if runErr != nil {
+			return "", fmt.Errorf("ffmpeg cover extract: %w (output: %s)", runErr, strings.TrimSpace(string(output)))
+		}
+		return "", fmt.Errorf("ffmpeg produced no cover")
+	}
+	return tmpPath, nil
 }
 
 // sanitizeIfNeeded strips excessive metadata (like multi-megabyte album art) from MP3s.
@@ -253,6 +322,69 @@ func parseID3Size(b []byte) int {
 	return size
 }
 
+// SaveCoverSidecar writes an image as a sibling `cover.<ext>` file next to the track
+// and returns the relative cover path (relative to dataDir, mirroring track.FilePath).
+// Use sourcePath to indicate the source filename or url so a sensible extension is chosen
+// when contentType is empty or generic.
+func SaveCoverSidecar(ctx context.Context, store storage.Storage, trackFilePath, contentType, sourcePath string, r io.Reader) (string, error) {
+	ext := coverExt(contentType, sourcePath)
+	parentRel := filepath.Dir(trackFilePath)
+	coverRel := filepath.Join(parentRel, "cover"+ext)
+
+	fullPath, ok := store.ResolveFullPath(coverRel)
+	if !ok {
+		return "", fmt.Errorf("failed to resolve cover path")
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create cover dir: %w", err)
+	}
+
+	tmp := fullPath + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cover tmp: %w", err)
+	}
+	if _, err := io.Copy(f, r); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return "", fmt.Errorf("failed to write cover: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("failed to close cover: %w", err)
+	}
+	if err := os.Rename(tmp, fullPath); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("failed to rename cover: %w", err)
+	}
+	return coverRel, nil
+}
+
+// coverExt picks a file extension for the cover sidecar based on the image content
+// type or, as a fallback, the source filename/URL extension.
+func coverExt(contentType, sourcePath string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	}
+	if sourcePath != "" {
+		ext := strings.ToLower(filepath.Ext(sourcePath))
+		switch ext {
+		case ".jpg", ".jpeg":
+			return ".jpg"
+		case ".png":
+			return ".png"
+		case ".webp":
+			return ".webp"
+		}
+	}
+	return ".jpg"
+}
+
 // OpenFile exposes storage Open for streaming
 func (m *Manager) OpenFile(ctx context.Context, relativePath string) (storage.ReadSeekCloser, storage.FileInfo, error) {
 	return m.storage.Open(ctx, relativePath)
@@ -313,6 +445,13 @@ func (m *Manager) DeleteTrack(ctx context.Context, trackID string) error {
 	// Delete file via storage
 	if err := m.storage.Delete(ctx, track.FilePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete file: %w", err)
+	}
+
+	// Delete cover sidecar if present (best-effort)
+	if track.CoverPath != nil && *track.CoverPath != "" {
+		if err := m.storage.Delete(ctx, *track.CoverPath); err != nil && !os.IsNotExist(err) {
+			fmt.Printf("[CrateDrop] Warning: failed to delete cover for track %s: %v\n", trackID, err)
+		}
 	}
 
 	// Delete from database
