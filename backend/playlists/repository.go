@@ -443,7 +443,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
 		       t.sample_rate, t.bitrate,
 		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
-		       t.file_path, t.created_at, t.updated_at,
+		       t.file_path, t.cover_path, t.created_at, t.updated_at,
 		       pt.added_at
 		FROM tracks t
 		INNER JOIN playlist_tracks pt ON t.id = pt.track_id
@@ -462,7 +462,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 	for rows.Next() {
 		var track imodels.Track
 		var bpm, bpmConf, keyConf sql.NullFloat64
-		var musicalKey sql.NullString
+		var musicalKey, coverPath sql.NullString
 		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
@@ -485,6 +485,7 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 			&analyzedAt,
 			&track.AnalysisStatus,
 			&track.FilePath,
+			&coverPath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
 			&track.CreatedAt, // We'll reuse this field for added_at
@@ -507,6 +508,10 @@ func (r *Repository) GetPlaylistTracks(playlistID string, limit, offset int) (*i
 		}
 		if analyzedAt.Valid {
 			track.AnalyzedAt = &analyzedAt.Time
+		}
+		if coverPath.Valid {
+			v := coverPath.String
+			track.CoverPath = &v
 		}
 
 		tracks = append(tracks, &track)
@@ -540,7 +545,7 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 		       t.duration_seconds, t.title, t.artist, t.album, t.genre, t.year,
 		       t.sample_rate, t.bitrate,
 		       t.bpm, t.bpm_confidence, t.musical_key, t.key_confidence, t.analyzed_at, t.analysis_status,
-		       t.file_path, t.created_at, t.updated_at
+		       t.file_path, t.cover_path, t.created_at, t.updated_at
 		FROM tracks t
 		LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
 		WHERE t.owner_user_id = ?
@@ -560,7 +565,7 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 	for rows.Next() {
 		var track imodels.Track
 		var bpm, bpmConf, keyConf sql.NullFloat64
-		var musicalKey sql.NullString
+		var musicalKey, coverPath sql.NullString
 		var analyzedAt sql.NullTime
 		err := rows.Scan(
 			&track.ID,
@@ -583,6 +588,7 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 			&analyzedAt,
 			&track.AnalysisStatus,
 			&track.FilePath,
+			&coverPath,
 			&track.CreatedAt,
 			&track.UpdatedAt,
 		)
@@ -604,6 +610,10 @@ func (r *Repository) GetTracksNotInPlaylist(userID string, limit, offset int) (*
 		}
 		if analyzedAt.Valid {
 			track.AnalyzedAt = &analyzedAt.Time
+		}
+		if coverPath.Valid {
+			v := coverPath.String
+			track.CoverPath = &v
 		}
 
 		tracks = append(tracks, &track)
